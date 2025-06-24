@@ -1,0 +1,7 @@
+.env
+*.db
+*.txt
+
+# Added by cargo
+
+/target
