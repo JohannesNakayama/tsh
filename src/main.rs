@@ -1,12 +1,16 @@
-use std::env;
-use std::fs::{self, OpenOptions};
+use std::error::Error;
+use std::fs;
 use std::io::{self, Read, Write};
 use std::process::{Command, Stdio};
-use std::path::PathBuf;
 use std::str::FromStr;
+use sqlx::prelude::FromRow;
 use sqlx::sqlite::{SqliteConnectOptions, SqlitePoolOptions};
-use sqlx::SqlitePool;
+use sqlx::{query, query_as, Sqlite, SqlitePool, Transaction};
 use tempfile::NamedTempFile;
+
+use crate::model::{Edge, Thought};
+
+mod model;
 
 /// Opens Neovim with a temporary buffer, optionally populated with initial data.
 /// It waits for Neovim to close, then returns the final content of the buffer.
@@ -57,35 +61,6 @@ fn open_and_edit_neovim_buffer(
     Ok(edited_content)
 }
 
-/// Stores the provided content into a simple file-based "database".
-/// For a real application, you would replace this with actual database integration (e.g., SQLite, PostgreSQL).
-///
-/// # Arguments
-/// * `content` - The string content to store.
-/// * `db_file_path` - The path to the file where content will be appended.
-///
-/// # Returns
-/// A `Result` indicating success (`Ok(())`) or an error (`Err(Box<dyn std::error.Error>)`).
-fn store_content(content: &str, db_file_path: &PathBuf) -> Result<(), Box<dyn std::error::Error>> {
-    // Open the database file in append mode, creating it if it doesn't exist.
-    let mut file = OpenOptions::new()
-        .create(true) // Create the file if it doesn't exist.
-        .append(true)  // Append to the file.
-        .open(db_file_path)?;
-
-    // Get the current timestamp.
-    let now = chrono::Local::now();
-    let timestamp = now.format("%Y-%m-%d %H:%M:%S").to_string();
-
-    // Write the content with a separator and timestamp.
-    writeln!(file, "--- Entry on {} ---", timestamp)?;
-    writeln!(file, "{}", content)?;
-    writeln!(file, "--------------------\n")?;
-
-    println!("Content successfully stored in: {}", db_file_path.display());
-    Ok(())
-}
-
 fn get_user_input() -> String {
     print!("What are you thinking about?");
     io::stdout().flush().unwrap(); // Ensure the prompt is displayed
@@ -109,10 +84,25 @@ pub async fn get_db_connection(db_url: &str) -> Result<SqlitePool, sqlx::Error> 
     Ok(pool)
 }
 
-fn main() {
-    // Define the path for our "database" file.
-    let mut db_file_path = env::current_dir().unwrap_or_else(|_| PathBuf::from("."));
-    db_file_path.push("my_thoughts.txt");
+pub async fn store_thought(tx: &mut Transaction<'_, Sqlite>, content: &str) -> Result<Thought, sqlx::Error> {
+    let thought: Thought = query_as("
+            insert into thought (content) values ($1) returning *
+        ")
+        .bind(content)
+        .fetch_one(&mut **tx)
+        .await?;
+    query("
+            insert into edge (node_id) values ($1)
+        ")
+        .bind(thought.id)
+        .execute(&mut **tx)
+        .await?;
+    Ok(thought)
+}
+
+#[tokio::main]
+async fn main() -> Result<(), Box<dyn Error>> {
+    let pool: SqlitePool = get_db_connection("sqlite://my_thoughts.db").await?;
 
     let initial_thought = get_user_input();
 
@@ -123,22 +113,15 @@ fn main() {
             println!("{}", edited_content);
             println!("```");
 
-            // Store the edited content.
-            match store_content(&edited_content, &db_file_path) {
+            let mut tx: Transaction<'_, Sqlite> = pool.begin().await?;
+            match store_thought(&mut tx, &edited_content).await {
                 Ok(_) => println!("Application finished successfully."),
                 Err(e) => eprintln!("Error storing content: {}", e),
             }
+            tx.commit().await?;
         }
         Err(e) => eprintln!("Error interacting with Neovim: {}", e),
     }
 
-    // You can also open an empty buffer:
-    // match open_and_edit_neovim_buffer(None) {
-    //     Ok(new_thought) => {
-    //         println!("\nNew thought captured:");
-    //         println!("{}", new_thought);
-    //         // Store the new thought
-    //     }
-    //     Err(e) => eprintln!("Error capturing new thought: {}", e),
-    // }
+    Ok(())
 }

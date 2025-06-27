@@ -1,1 +1,3 @@
-drop table users;
+drop table thoughts;
+
+drop table graph;
