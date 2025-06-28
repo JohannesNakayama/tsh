@@ -77,7 +77,7 @@ fn open_and_edit_neovim_buffer(
 }
 
 fn get_user_input() -> String {
-    print!("What are you thinking about?");
+    println!("What are you thinking about?");
     io::stdout().flush().unwrap(); // Ensure the prompt is displayed
     let mut input = String::new();
     io::stdin().read_line(&mut input).unwrap();
@@ -90,10 +90,26 @@ pub async fn get_db(db_url: &str) -> Result<Connection, rusqlite::Error> {
     Ok(conn)
 }
 
-pub async fn store_thought(content: &str) -> Result<Thought, rusqlite::Error> {
-    let conn = get_db("my_thoughts.db").await?;
+pub async fn store_thought(content: &str, embedding: Vec<f32>) -> Result<Thought, rusqlite::Error> {
+    unsafe {
+        sqlite3_auto_extension(Some(std::mem::transmute(sqlite3_vec_init as *const ())));
+    }
+    let db = get_db("my_thoughts.db").await?;
 
-    let mut stmt = conn.prepare("insert into thought (content) values ($1) returning *")?;
+//     let v: Vec<f32> = vec![0.1, 0.2, 0.3];
+
+//     let (vec_version, embedding): (String, String) = db.query_row(
+//         "select vec_version(), vec_to_json(?)",
+//         [&v.as_bytes()],
+//         |x| Ok((x.get(0)?, x.get(1)?)),
+//     )?;
+
+//     println!("vec_version={vec_version}, embedding={embedding}");
+
+
+    let mut stmt = db.prepare("insert into thought (content) values (?) returning id, content")?;
+    stmt.execute(rusqlite::params![embedding.as_bytes()]);
+
     let thought: Thought = stmt.query_one((content,), |row| {
         Ok(Thought {
             id: row.get(0)?,
@@ -101,32 +117,35 @@ pub async fn store_thought(content: &str) -> Result<Thought, rusqlite::Error> {
         })
     })?;
 
-    let mut stmt2 = conn.prepare("insert into edge (node_id) values ($1)")?;
+    let mut stmt3 = db.prepare("insert into thought_embedding (embedding) values (?)");
+
+
+    let mut stmt2 = db.prepare("insert into edge (node_id) values ($1)")?;
     stmt2.execute((thought.id,))?;
 
     Ok(thought)
 }
 
-async fn add_thought() -> Result<(), Box<dyn Error>> {
-    let initial_thought = get_user_input();
+// async fn add_thought() -> Result<(), Box<dyn Error>> {
+//     let initial_thought = get_user_input();
 
-    match open_and_edit_neovim_buffer(Some(&initial_thought)) {
-        Ok(edited_content) => {
-            println!("\nNeovim closed. Edited content retrieved:");
-            println!("```");
-            println!("{}", edited_content);
-            println!("```");
+//     match open_and_edit_neovim_buffer(Some(&initial_thought)) {
+//         Ok(edited_content) => {
+//             println!("\nNeovim closed. Edited content retrieved:");
+//             println!("```");
+//             println!("{}", edited_content);
+//             println!("```");
 
-            match store_thought(&edited_content).await {
-                Ok(_) => println!("Application finished successfully."),
-                Err(e) => eprintln!("Error storing content: {}", e),
-            }
-        }
-        Err(e) => eprintln!("Error interacting with Neovim: {}", e),
-    }
+//             match store_thought(&edited_content).await {
+//                 Ok(_) => println!("Application finished successfully."),
+//                 Err(e) => eprintln!("Error storing content: {}", e),
+//             }
+//         }
+//         Err(e) => eprintln!("Error interacting with Neovim: {}", e),
+//     }
 
-    Ok(())
-}
+//     Ok(())
+// }
 
 async fn embed(thought: &str) -> Result<Vec<f32>, Box<dyn Error>> {
     let api_key = "ollama";
@@ -146,14 +165,6 @@ async fn embed(thought: &str) -> Result<Vec<f32>, Box<dyn Error>> {
         .build()?;
 
     let response = client.embeddings().create(request).await?;
-
-    // for data in response.data {
-    //     println!(
-    //         "[{}]: has embedding of length {}",
-    //         data.index,
-    //         data.embedding.len()
-    //     )
-    // }
 
     let choice: Vec<f32> = response.data[0].embedding.clone();
 
@@ -204,11 +215,22 @@ async fn chat(prompt: &str) -> Result<(), Box<dyn Error>> {
 async fn main() -> Result<(), Box<dyn Error>> {
     // add_thought().await?;
 
-    let thought = "abcde";
-    match embed(thought).await {
-        Ok(result) => println!("{:?}", result),
-        Err(e) => eprintln!("{:?}", e),
+    unsafe {
+        sqlite3_auto_extension(Some(std::mem::transmute(sqlite3_vec_init as *const ())));
     }
+    let db = get_db("my_thoughts.db").await?;
+
+    let thought = get_user_input();
+
+    if let Ok(embedding) = embed(&thought).await {
+        store_thought(&thought, embedding).await?;
+    }
+
+    // match embed(&thought).await {
+    //     Ok(result) => store_thought,
+    //     Err(e) => eprintln!("{:?}", e),
+    // }
+
 
     // let thought = get_user_input();
     // chat(&thought).await?;

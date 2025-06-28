@@ -1,6 +1,10 @@
 create table thought (
-    id        integer primary key autoincrement
+    id        integer primary key
   , content   text    not null
+);
+
+create virtual table thought_embedding using vec0(
+  embedding float[384]
 );
 
 create table edge (
