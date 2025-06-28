@@ -1,19 +1,31 @@
+use async_openai::Client;
+use async_openai::config::OpenAIConfig;
+use async_openai::types::{
+    ChatCompletionRequestSystemMessageArgs, ChatCompletionRequestUserMessageArgs,
+    CreateChatCompletionRequestArgs,
+};
+use include_dir::{Dir, include_dir};
+use rusqlite::Connection;
+use rusqlite::ffi::sqlite3_auto_extension;
+use rusqlite_migration::Migrations;
+use sqlite_vec::sqlite3_vec_init;
 use std::error::Error;
 use std::fs;
 use std::io::{self, Read, Write};
 use std::process::{Command, Stdio};
 use std::str::FromStr;
-use async_openai::config::OpenAIConfig;
-use async_openai::types::{ChatCompletionRequestSystemMessageArgs, ChatCompletionRequestUserMessageArgs, CreateChatCompletionRequestArgs};
-use async_openai::Client;
-use sqlx::prelude::FromRow;
-use sqlx::sqlite::{SqliteConnectOptions, SqlitePoolOptions};
-use sqlx::{query, query_as, Sqlite, SqlitePool, Transaction};
+use std::sync::LazyLock;
 use tempfile::NamedTempFile;
+use zerocopy::IntoBytes;
 
 use crate::model::{Edge, Thought};
 
 mod model;
+
+static MIGRATIONS_DIR: Dir = include_dir!("$CARGO_MANIFEST_DIR/migrations");
+
+static MIGRATIONS: LazyLock<Migrations<'static>> =
+    LazyLock::new(|| Migrations::from_directory(&MIGRATIONS_DIR).unwrap());
 
 /// Opens Neovim with a temporary buffer, optionally populated with initial data.
 /// It waits for Neovim to close, then returns the final content of the buffer.
@@ -72,40 +84,30 @@ fn get_user_input() -> String {
     input.trim().to_string()
 }
 
-pub async fn get_db_connection(db_url: &str) -> Result<SqlitePool, sqlx::Error> {
-    let options = SqliteConnectOptions::from_str(db_url)?
-        .create_if_missing(true)
-        .journal_mode(sqlx::sqlite::SqliteJournalMode::Wal)
-        .synchronous(sqlx::sqlite::SqliteSynchronous::Normal)
-        .foreign_keys(true);
-
-    let pool = SqlitePoolOptions::new()
-        .max_connections(5)
-        .connect_with(options)
-        .await?;
-
-    Ok(pool)
+pub async fn get_db(db_url: &str) -> Result<Connection, rusqlite::Error> {
+    let mut conn = Connection::open(db_url)?;
+    MIGRATIONS.to_latest(&mut conn).unwrap();
+    Ok(conn)
 }
 
-pub async fn store_thought(tx: &mut Transaction<'_, Sqlite>, content: &str) -> Result<Thought, sqlx::Error> {
-    let thought: Thought = query_as("
-            insert into thought (content) values ($1) returning *
-        ")
-        .bind(content)
-        .fetch_one(&mut **tx)
-        .await?;
-    query("
-            insert into edge (node_id) values ($1)
-        ")
-        .bind(thought.id)
-        .execute(&mut **tx)
-        .await?;
+pub async fn store_thought(content: &str) -> Result<Thought, rusqlite::Error> {
+    let conn = get_db("my_thoughts.db").await?;
+
+    let mut stmt = conn.prepare("insert into thought (content) values ($1) returning *")?;
+    let thought: Thought = stmt.query_one((content,), |row| {
+        Ok(Thought {
+            id: row.get(0)?,
+            content: row.get(1)?,
+        })
+    })?;
+
+    let mut stmt2 = conn.prepare("insert into edge (node_id) values ($1)")?;
+    stmt2.execute((thought.id,))?;
+
     Ok(thought)
 }
 
 async fn add_thought() -> Result<(), Box<dyn Error>> {
-    let pool: SqlitePool = get_db_connection("sqlite://my_thoughts.db").await?;
-
     let initial_thought = get_user_input();
 
     match open_and_edit_neovim_buffer(Some(&initial_thought)) {
@@ -115,12 +117,10 @@ async fn add_thought() -> Result<(), Box<dyn Error>> {
             println!("{}", edited_content);
             println!("```");
 
-            let mut tx: Transaction<'_, Sqlite> = pool.begin().await?;
-            match store_thought(&mut tx, &edited_content).await {
+            match store_thought(&edited_content).await {
                 Ok(_) => println!("Application finished successfully."),
                 Err(e) => eprintln!("Error storing content: {}", e),
             }
-            tx.commit().await?;
         }
         Err(e) => eprintln!("Error interacting with Neovim: {}", e),
     }
@@ -139,8 +139,8 @@ async fn chat(prompt: &str) -> Result<(), Box<dyn Error>> {
     let client = Client::with_config(
         OpenAIConfig::new()
             .with_api_key(api_key)
-            .with_api_base(api_base)
-        );
+            .with_api_base(api_base),
+    );
 
     let model = "llama3.2:1b";
 
@@ -177,15 +177,28 @@ async fn main() -> Result<(), Box<dyn Error>> {
     // add_thought().await?;
 
     // let thought = "abcde";
-
     // match embed(thought) {
     //     Ok(result) => println!("{:?}", result),
     //     Err(e) => eprintln!("{:?}", e),
     // }
 
-    let thought = get_user_input();
+    // let thought = get_user_input();
+    // chat(&thought).await?;
 
-    chat(&thought).await?;
+    unsafe {
+        sqlite3_auto_extension(Some(std::mem::transmute(sqlite3_vec_init as *const ())));
+    }
+
+    let db = get_db("my_thoughts.db").await?;
+    let v: Vec<f32> = vec![0.1, 0.2, 0.3];
+
+    let (vec_version, embedding): (String, String) = db.query_row(
+        "select vec_version(), vec_to_json(?)",
+        [&v.as_bytes()],
+        |x| Ok((x.get(0)?, x.get(1)?)),
+    )?;
+
+    println!("vec_version={vec_version}, embedding={embedding}");
 
     Ok(())
 }

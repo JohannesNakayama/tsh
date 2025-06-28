@@ -8,3 +8,4 @@ create table edge (
   , parent_id integer          references thought(id) default null -- nullable
   , primary key (node_id, parent_id)
 );
+
