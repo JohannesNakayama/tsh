@@ -77,7 +77,7 @@ fn open_and_edit_neovim_buffer(
 }
 
 fn get_user_input() -> String {
-    println!("What are you thinking about?");
+    println!("Your input: ");
     io::stdout().flush().unwrap(); // Ensure the prompt is displayed
     let mut input = String::new();
     io::stdin().read_line(&mut input).unwrap();
@@ -205,8 +205,10 @@ async fn chat(prompt: &str) -> Result<(), Box<dyn Error>> {
 async fn main() -> Result<(), Box<dyn Error>> {
     add_thought().await?;
 
-    // let thought = get_user_input();
-    // chat(&thought).await?;
+    println!("Okay, then let's chat now! Give me your prompt:");
+
+    let thought = get_user_input();
+    chat(&thought).await?;
 
     Ok(())
 }
