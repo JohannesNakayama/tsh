@@ -4,7 +4,8 @@ create table thought (
 );
 
 create virtual table thought_embedding using vec0(
-  embedding float[384]
+    thought_id integer not null references thought(id)
+  , embedding float[384]
 );
 
 create table edge (
