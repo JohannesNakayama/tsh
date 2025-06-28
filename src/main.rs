@@ -2,7 +2,7 @@ use async_openai::Client;
 use async_openai::config::OpenAIConfig;
 use async_openai::types::{
     ChatCompletionRequestSystemMessageArgs, ChatCompletionRequestUserMessageArgs,
-    CreateChatCompletionRequestArgs,
+    CreateChatCompletionRequestArgs, CreateEmbeddingRequestArgs,
 };
 use include_dir::{Dir, include_dir};
 use rusqlite::Connection;
@@ -128,8 +128,36 @@ async fn add_thought() -> Result<(), Box<dyn Error>> {
     Ok(())
 }
 
-fn embed(thought: &str) -> Result<Vec<f32>, Box<dyn Error>> {
-    Ok(vec![0.1, 0.2, 0.3])
+async fn embed(thought: &str) -> Result<Vec<f32>, Box<dyn Error>> {
+    let api_key = "ollama";
+    let api_base = "http://localhost:11434/v1";
+
+    let client = Client::with_config(
+        OpenAIConfig::new()
+            .with_api_key(api_key)
+            .with_api_base(api_base),
+    );
+
+    let request = CreateEmbeddingRequestArgs::default()
+        .model("all-minilm:latest")
+        .input([
+            thought,
+        ])
+        .build()?;
+
+    let response = client.embeddings().create(request).await?;
+
+    // for data in response.data {
+    //     println!(
+    //         "[{}]: has embedding of length {}",
+    //         data.index,
+    //         data.embedding.len()
+    //     )
+    // }
+
+    let choice: Vec<f32> = response.data[0].embedding.clone();
+
+    Ok(choice)
 }
 
 async fn chat(prompt: &str) -> Result<(), Box<dyn Error>> {
@@ -176,29 +204,30 @@ async fn chat(prompt: &str) -> Result<(), Box<dyn Error>> {
 async fn main() -> Result<(), Box<dyn Error>> {
     // add_thought().await?;
 
-    // let thought = "abcde";
-    // match embed(thought) {
-    //     Ok(result) => println!("{:?}", result),
-    //     Err(e) => eprintln!("{:?}", e),
-    // }
+    let thought = "abcde";
+    match embed(thought).await {
+        Ok(result) => println!("{:?}", result),
+        Err(e) => eprintln!("{:?}", e),
+    }
 
     // let thought = get_user_input();
     // chat(&thought).await?;
 
-    unsafe {
-        sqlite3_auto_extension(Some(std::mem::transmute(sqlite3_vec_init as *const ())));
-    }
 
-    let db = get_db("my_thoughts.db").await?;
-    let v: Vec<f32> = vec![0.1, 0.2, 0.3];
+    // unsafe {
+    //     sqlite3_auto_extension(Some(std::mem::transmute(sqlite3_vec_init as *const ())));
+    // }
 
-    let (vec_version, embedding): (String, String) = db.query_row(
-        "select vec_version(), vec_to_json(?)",
-        [&v.as_bytes()],
-        |x| Ok((x.get(0)?, x.get(1)?)),
-    )?;
+    // let db = get_db("my_thoughts.db").await?;
+    // let v: Vec<f32> = vec![0.1, 0.2, 0.3];
 
-    println!("vec_version={vec_version}, embedding={embedding}");
+    // let (vec_version, embedding): (String, String) = db.query_row(
+    //     "select vec_version(), vec_to_json(?)",
+    //     [&v.as_bytes()],
+    //     |x| Ok((x.get(0)?, x.get(1)?)),
+    // )?;
+
+    // println!("vec_version={vec_version}, embedding={embedding}");
 
     Ok(())
 }
