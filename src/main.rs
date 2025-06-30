@@ -77,7 +77,7 @@ fn open_and_edit_neovim_buffer(
 }
 
 fn get_user_input() -> String {
-    println!("Your input: ");
+    print!("> ");
     io::stdout().flush().unwrap(); // Ensure the prompt is displayed
     let mut input = String::new();
     io::stdin().read_line(&mut input).unwrap();
@@ -96,23 +96,67 @@ pub async fn store_thought(content: &str, embedding: Vec<f32>) -> Result<Thought
     }
     let db = get_db("my_thoughts.db").await?;
 
-    let mut insert_thought_stmt = db.prepare("insert into thought (content) values (?) returning id, content")?;
+    let thought: Thought = db
+        .prepare("insert into thought (content) values (?) returning id, content")?
+        .query_one((content,), |row| {
+            Ok(Thought {
+                id: row.get(0)?,
+                content: row.get(1)?,
+            })
+        })?;
 
-    let thought: Thought = insert_thought_stmt.query_one((content,), |row| {
-        Ok(Thought {
-            id: row.get(0)?,
-            content: row.get(1)?,
-        })
-    })?;
+    db.prepare("insert into thought_embedding (thought_id, embedding) values (?, ?)")?
+        .execute(rusqlite::params![thought.id, embedding.as_bytes()])?;
 
-    let mut insert_embedding_stmt = db.prepare("insert into thought_embedding (thought_id, embedding) values (?, ?)")?;
-    insert_embedding_stmt.execute(rusqlite::params![thought.id, embedding.as_bytes()])?;
-
-    let mut insert_edge_stmt = db.prepare("insert into edge (node_id) values ($1)")?;
-    insert_edge_stmt.execute((thought.id,))?;
+    db.prepare("insert into edge (node_id) values (?)")?
+        .execute((thought.id,))?;
 
     Ok(thought)
 }
+
+
+pub async fn find_thoughts(query: &str) -> Result<(), rusqlite::Error> {
+    unsafe {
+        sqlite3_auto_extension(Some(std::mem::transmute(sqlite3_vec_init as *const ())));
+    }
+    let db = get_db("my_thoughts.db").await?;
+
+    let query_embedding = match embed(query).await {
+        Ok(result) => result,
+        Err(e) => {
+            eprintln!("Error embedding query: {}", e);
+            return Err(rusqlite::Error::InvalidQuery);
+        }
+    };
+
+    let mut stmt = db.prepare(
+        "
+        select id, content
+        from thought t
+        join thought_embedding te on t.id = te.thought_id
+        where te.embedding match ?
+        and k = 3
+        "
+        )?;
+
+    let thoughts = stmt.query_map(
+        [query_embedding.as_bytes()],
+        |row| {
+            Ok(Thought {
+                id: row.get(0)?,
+                content: row.get(1)?,
+            })
+        },
+    );
+
+    for thought in thoughts? {
+        let thought = thought?;
+        println!("Found Thought: {} - {}", thought.id, thought.content);
+    }
+
+    Ok(())
+}
+
 
 async fn add_thought() -> Result<(), Box<dyn Error>> {
     let initial_thought = get_user_input();
@@ -178,7 +222,7 @@ async fn chat(prompt: &str) -> Result<(), Box<dyn Error>> {
         .model(model)
         .messages([
             ChatCompletionRequestSystemMessageArgs::default()
-                .content("You are a helpful assistant with a French accent.")
+                .content("You are a helpful assistant with a Italian accent.")
                 .build()?
                 .into(),
             ChatCompletionRequestUserMessageArgs::default()
@@ -203,12 +247,16 @@ async fn chat(prompt: &str) -> Result<(), Box<dyn Error>> {
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn Error>> {
-    add_thought().await?;
+    // add_thought().await?;
 
-    println!("Okay, then let's chat now! Give me your prompt:");
+    // println!("Okay, then let's chat now! Give me your prompt:");
+    // let thought = get_user_input();
+    // chat(&thought).await?;
 
-    let thought = get_user_input();
-    chat(&thought).await?;
+    println!("What thoughts would you like to retrieve?");
+    let query = get_user_input();
+
+    find_thoughts(&query).await?;
 
     Ok(())
 }
