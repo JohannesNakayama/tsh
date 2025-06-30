@@ -13,12 +13,11 @@ use std::error::Error;
 use std::fs;
 use std::io::{self, Read, Write};
 use std::process::{Command, Stdio};
-use std::str::FromStr;
 use std::sync::LazyLock;
 use tempfile::NamedTempFile;
 use zerocopy::IntoBytes;
 
-use crate::model::{Edge, Thought};
+use crate::model::Thought;
 
 mod model;
 
@@ -90,7 +89,8 @@ pub async fn get_db(db_url: &str) -> Result<Connection, rusqlite::Error> {
     Ok(conn)
 }
 
-pub async fn store_thought(content: &str, embedding: Vec<f32>) -> Result<Thought, rusqlite::Error> {
+pub async fn store_atomic_thought(content: &str, embedding: Vec<f32>) -> Result<Thought, rusqlite::Error> {
+    // TODO: create embedding here, instead of upstream
     unsafe {
         sqlite3_auto_extension(Some(std::mem::transmute(sqlite3_vec_init as *const ())));
     }
@@ -112,6 +112,35 @@ pub async fn store_thought(content: &str, embedding: Vec<f32>) -> Result<Thought
         .execute((thought.id,))?;
 
     Ok(thought)
+}
+
+
+pub async fn store_combined_thought(content: &str, embedding: Vec<f32>, parent_ids: Vec<i64>) -> Result<(), rusqlite::Error> {
+    // TODO: create embedding here, instead of upstream
+    unsafe {
+        sqlite3_auto_extension(Some(std::mem::transmute(sqlite3_vec_init as *const ())));
+    }
+    let db = get_db("my_thoughts.db").await?;
+
+    let thought: Thought = db
+        .prepare("insert into thought (content) values (?) returning id, content")?
+        .query_one((content,), |row| {
+            Ok(Thought {
+                id: row.get(0)?,
+                content: row.get(1)?,
+            })
+        })?;
+
+    db.prepare("insert into thought_embedding (thought_id, embedding) values (?, ?)")?
+        .execute(rusqlite::params![thought.id, embedding.as_bytes()])?;
+
+    let mut insert_edge_stmt = db.prepare("insert into edge (node_id, parent_id) values (?, ?)")?;
+
+    for id in parent_ids {
+        insert_edge_stmt.execute(rusqlite::params![thought.id, id])?;
+    }
+
+    Ok(())
 }
 
 
@@ -165,7 +194,7 @@ async fn add_thought() -> Result<(), Box<dyn Error>> {
             println!("```");
 
             if let Ok(embedding) = embed(&edited_content).await {
-                match store_thought(&edited_content, embedding).await {
+                match store_atomic_thought(&edited_content, embedding).await {
                     Ok(_) => println!("Application finished successfully."),
                     Err(e) => eprintln!("Error storing content: {}", e),
                 }
@@ -175,6 +204,16 @@ async fn add_thought() -> Result<(), Box<dyn Error>> {
     }
 
     Ok(())
+}
+
+async fn combine_thoughts(thoughts: Vec<Thought>) -> Result<String, Box<dyn Error>> {
+    let combined_thoughts = thoughts
+        .iter()
+        .map(|thought| thought.content.as_str())
+        .collect::<Vec<&str>>()
+        .join("\n\n");
+
+    Ok(combined_thoughts)
 }
 
 async fn embed(thought: &str) -> Result<Vec<f32>, Box<dyn Error>> {
@@ -201,7 +240,8 @@ async fn embed(thought: &str) -> Result<Vec<f32>, Box<dyn Error>> {
     Ok(choice)
 }
 
-async fn chat(prompt: &str) -> Result<(), Box<dyn Error>> {
+async fn chat() -> Result<(), Box<dyn Error>> {
+    let prompt = get_user_input();
     let api_key = "ollama";
     let api_base = "http://localhost:11434/v1";
 
@@ -241,21 +281,38 @@ async fn chat(prompt: &str) -> Result<(), Box<dyn Error>> {
     Ok(())
 }
 
+async fn add_combined_thought() -> Result<(), Box<dyn Error>> {
+    println!("What topic would you like to write about?");
+    let query = get_user_input();
+    let thoughts = find_thoughts(&query).await?;
+    let buffer_content = combine_thoughts(thoughts.clone()).await?;
+    match open_and_edit_neovim_buffer(Some(&buffer_content)) {
+        Ok(edited_content) => {
+            println!("\nNeovim closed. Edited content retrieved:");
+            println!("```");
+            println!("{}", edited_content);
+            println!("```");
+
+            let parent_ids: Vec<i64> = thoughts.iter().map(|t| t.id).collect();
+
+            if let Ok(embedding) = embed(&edited_content).await {
+                match store_combined_thought(&edited_content, embedding, parent_ids).await {
+                    Ok(_) => println!("Application finished successfully."),
+                    Err(e) => eprintln!("Error storing content: {}", e),
+                }
+            }
+        }
+        Err(e) => eprintln!("Error interacting with Neovim: {}", e),
+    }
+
+    Ok(())
+}
+
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn Error>> {
     // add_thought().await?;
-
-    // println!("Okay, then let's chat now! Give me your prompt:");
-    // let thought = get_user_input();
-    // chat(&thought).await?;
-
-    println!("What thoughts would you like to retrieve?");
-    let query = get_user_input();
-
-    let thoughts = find_thoughts(&query).await?;
-    for thought in &thoughts {
-        println!("Found Thought: {} - {}", thought.id, thought.content);
-    }
+    // chat().await?;
+    add_combined_thought().await?;
 
     Ok(())
 }
