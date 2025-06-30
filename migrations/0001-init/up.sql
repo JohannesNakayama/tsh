@@ -5,7 +5,7 @@ create table thought (
 
 create virtual table thought_embedding using vec0(
     thought_id integer    not null references thought(id)
-  , embedding  float[384]
+  , embedding  float[384] -- not null constraint doesn't work with sqlite-vec, but should not be null
 );
 
 create table edge (
