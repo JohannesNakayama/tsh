@@ -115,7 +115,7 @@ pub async fn store_thought(content: &str, embedding: Vec<f32>) -> Result<Thought
 }
 
 
-pub async fn find_thoughts(query: &str) -> Result<(), rusqlite::Error> {
+pub async fn find_thoughts(query: &str) -> Result<Vec<Thought>, rusqlite::Error> {
     unsafe {
         sqlite3_auto_extension(Some(std::mem::transmute(sqlite3_vec_init as *const ())));
     }
@@ -139,7 +139,7 @@ pub async fn find_thoughts(query: &str) -> Result<(), rusqlite::Error> {
         "
         )?;
 
-    let thoughts = stmt.query_map(
+    let thoughts: Vec<Thought> = stmt.query_map(
         [query_embedding.as_bytes()],
         |row| {
             Ok(Thought {
@@ -147,14 +147,10 @@ pub async fn find_thoughts(query: &str) -> Result<(), rusqlite::Error> {
                 content: row.get(1)?,
             })
         },
-    );
+    )?
+        .collect::<Result<Vec<Thought>, rusqlite::Error>>()?;
 
-    for thought in thoughts? {
-        let thought = thought?;
-        println!("Found Thought: {} - {}", thought.id, thought.content);
-    }
-
-    Ok(())
+    Ok(thoughts)
 }
 
 
@@ -256,7 +252,10 @@ async fn main() -> Result<(), Box<dyn Error>> {
     println!("What thoughts would you like to retrieve?");
     let query = get_user_input();
 
-    find_thoughts(&query).await?;
+    let thoughts = find_thoughts(&query).await?;
+    for thought in &thoughts {
+        println!("Found Thought: {} - {}", thought.id, thought.content);
+    }
 
     Ok(())
 }
