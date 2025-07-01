@@ -47,8 +47,6 @@ pub async fn store_atomic_thought(tx: &Transaction<'_>, content: &str, embedding
 }
 
 pub async fn store_combined_thought(tx: &Transaction<'_>, content: &str, embedding: Vec<f32>, parent_ids: Vec<i64>) -> Result<(), rusqlite::Error> {
-    // let db = get_db("my_thoughts.db").await?;
-
     let thought: Thought = tx
         .prepare("insert into thought (content) values (?) returning id, content")?
         .query_one((content,), |row| {
