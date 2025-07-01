@@ -1,13 +1,10 @@
-use rusqlite::ffi::sqlite3_auto_extension;
-use sqlite_vec::sqlite3_vec_init;
 use std::error::Error;
 use std::fs;
 use std::io::{self, Read, Write};
 use std::process::{Command, Stdio};
 use tempfile::NamedTempFile;
-use zerocopy::IntoBytes;
 
-use crate::db::{get_db, store_atomic_thought, store_combined_thought};
+use crate::db::{find_thoughts_by_embedding, get_db, store_atomic_thought, store_combined_thought};
 use crate::llm::embed;
 use crate::model::Thought;
 
@@ -86,9 +83,17 @@ pub async fn add_thought() -> Result<(), Box<dyn Error>> {
             println!("```");
 
             if let Ok(embedding) = embed(&edited_content).await {
-                match store_atomic_thought(&edited_content, embedding).await {
-                    Ok(_) => println!("Application finished successfully."),
-                    Err(e) => eprintln!("Error storing content: {}", e),
+                let mut conn = get_db("my_thoughts.db").await?;
+                let tx = conn.transaction()?;
+                match store_atomic_thought(&tx, &edited_content, embedding).await {
+                    Ok(_) => {
+                        tx.commit()?;
+                        println!("Application finished successfully.");
+                    },
+                    Err(e) => {
+                        tx.rollback()?;
+                        eprintln!("Error storing content: {}", e);
+                    },
                 }
             }
         }
@@ -124,10 +129,19 @@ pub async fn add_combined_thought() -> Result<(), Box<dyn Error>> {
 
             let parent_ids: Vec<i64> = thoughts.iter().map(|t| t.id).collect();
 
+            let mut conn = get_db("my_thoughts.db").await?;
+            let tx = conn.transaction()?;
+
             if let Ok(embedding) = embed(&edited_content).await {
-                match store_combined_thought(&edited_content, embedding, parent_ids).await {
-                    Ok(_) => println!("Application finished successfully."),
-                    Err(e) => eprintln!("Error storing content: {}", e),
+                match store_combined_thought(&tx, &edited_content, embedding, parent_ids).await {
+                    Ok(_) => {
+                        tx.commit()?;
+                        println!("Application finished successfully.");
+                    },
+                    Err(e) => {
+                        tx.rollback()?;
+                        eprintln!("Error storing content: {}", e)
+                    },
                 }
             }
         }
@@ -138,11 +152,6 @@ pub async fn add_combined_thought() -> Result<(), Box<dyn Error>> {
 }
 
 pub async fn find_thoughts(query: &str) -> Result<Vec<Thought>, rusqlite::Error> {
-    unsafe {
-        sqlite3_auto_extension(Some(std::mem::transmute(sqlite3_vec_init as *const ())));
-    }
-    let db = get_db("my_thoughts.db").await?;
-
     let query_embedding = match embed(query).await {
         Ok(result) => result,
         Err(e) => {
@@ -151,26 +160,9 @@ pub async fn find_thoughts(query: &str) -> Result<Vec<Thought>, rusqlite::Error>
         }
     };
 
-    let mut stmt = db.prepare(
-        "
-        select id, content
-        from thought t
-        join thought_embedding te on t.id = te.thought_id
-        where te.embedding match ?
-        and k = 3
-        "
-        )?;
-
-    let thoughts: Vec<Thought> = stmt.query_map(
-        [query_embedding.as_bytes()],
-        |row| {
-            Ok(Thought {
-                id: row.get(0)?,
-                content: row.get(1)?,
-            })
-        },
-    )?
-        .collect::<Result<Vec<Thought>, rusqlite::Error>>()?;
+    let mut conn = get_db("my_thoughts.db").await?;
+    let tx = conn.transaction()?;
+    let thoughts: Vec<Thought> = find_thoughts_by_embedding(&tx, query_embedding).await?;
 
     Ok(thoughts)
 }
