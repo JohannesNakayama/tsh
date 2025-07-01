@@ -5,7 +5,7 @@ use std::process::{Command, Stdio};
 use tempfile::NamedTempFile;
 
 use crate::db::{find_thoughts_by_embedding, get_db, store_atomic_thought, store_combined_thought};
-use crate::llm::embed;
+use crate::llm::LlmClient;
 use crate::model::Thought;
 
 pub mod model;
@@ -72,7 +72,7 @@ pub fn get_user_input() -> String {
 }
 
 
-pub async fn add_thought() -> Result<(), Box<dyn Error>> {
+pub async fn add_thought(llm_client: &mut LlmClient) -> Result<(), Box<dyn Error>> {
     let initial_thought = get_user_input();
 
     match open_and_edit_neovim_buffer(Some(&initial_thought)) {
@@ -82,10 +82,10 @@ pub async fn add_thought() -> Result<(), Box<dyn Error>> {
             println!("{}", edited_content);
             println!("```");
 
-            if let Ok(embedding) = embed(&edited_content).await {
+            if let Ok(embedding) = llm_client.embed(&edited_content).await {
                 let mut conn = get_db("my_thoughts.db").await?;
                 let tx = conn.transaction()?;
-                match store_atomic_thought(&tx, &edited_content, embedding).await {
+                match store_atomic_thought(&tx, &edited_content, embedding.clone()).await {
                     Ok(_) => {
                         tx.commit()?;
                         println!("Application finished successfully.");
@@ -115,10 +115,10 @@ pub async fn combine_thoughts(thoughts: Vec<Thought>) -> Result<String, Box<dyn 
 
 
 
-pub async fn add_combined_thought() -> Result<(), Box<dyn Error>> {
+pub async fn add_combined_thought(llm_client: &mut LlmClient) -> Result<(), Box<dyn Error>> {
     println!("What topic would you like to write about?");
     let query = get_user_input();
-    let thoughts = find_thoughts(&query).await?;
+    let thoughts = find_thoughts(llm_client, &query).await?;
     let buffer_content = combine_thoughts(thoughts.clone()).await?;
     match open_and_edit_neovim_buffer(Some(&buffer_content)) {
         Ok(edited_content) => {
@@ -132,7 +132,7 @@ pub async fn add_combined_thought() -> Result<(), Box<dyn Error>> {
             let mut conn = get_db("my_thoughts.db").await?;
             let tx = conn.transaction()?;
 
-            if let Ok(embedding) = embed(&edited_content).await {
+            if let Ok(embedding) = llm_client.embed(&edited_content).await {
                 match store_combined_thought(&tx, &edited_content, embedding, parent_ids).await {
                     Ok(_) => {
                         tx.commit()?;
@@ -151,8 +151,8 @@ pub async fn add_combined_thought() -> Result<(), Box<dyn Error>> {
     Ok(())
 }
 
-pub async fn find_thoughts(query: &str) -> Result<Vec<Thought>, rusqlite::Error> {
-    let query_embedding = match embed(query).await {
+pub async fn find_thoughts(llm_client: &mut LlmClient, query: &str) -> Result<Vec<Thought>, rusqlite::Error> {
+    let query_embedding = match llm_client.embed(query).await {
         Ok(result) => result,
         Err(e) => {
             eprintln!("Error embedding query: {}", e);
