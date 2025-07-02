@@ -8,10 +8,9 @@ use crate::db::{find_zettels_by_embedding, get_db, store_article, store_zettel};
 use crate::llm::LlmClient;
 use crate::model::{Article, Zettel};
 
-pub mod model;
 pub mod db;
 pub mod llm;
-
+pub mod model;
 
 /// Opens Neovim with a temporary buffer, optionally populated with initial data.
 /// It waits for Neovim to close, then returns the final content of the buffer.
@@ -59,7 +58,6 @@ pub fn open_and_edit_neovim_buffer(
     Ok(edited_content)
 }
 
-
 pub fn get_user_input() -> String {
     print!("> ");
     io::stdout().flush().unwrap(); // Ensure the prompt is displayed
@@ -68,8 +66,10 @@ pub fn get_user_input() -> String {
     input.trim().to_string()
 }
 
-
-pub async fn add_zettel(llm_client: &mut LlmClient, parents: &Vec<Zettel>) -> Result<(), Box<dyn Error>> {
+pub async fn add_zettel(
+    llm_client: &mut LlmClient,
+    parents: &Vec<Zettel>,
+) -> Result<(), Box<dyn Error>> {
     match open_and_edit_neovim_buffer(Some(combine_zettel_contents(parents.to_vec()).as_str())) {
         Ok(edited_content) => {
             println!("\nNeovim closed. Edited content retrieved:");
@@ -86,11 +86,11 @@ pub async fn add_zettel(llm_client: &mut LlmClient, parents: &Vec<Zettel>) -> Re
                     Ok(_) => {
                         tx.commit()?;
                         println!("Application finished successfully.");
-                    },
+                    }
                     Err(e) => {
                         tx.rollback()?;
                         eprintln!("Error storing content: {}", e);
-                    },
+                    }
                 }
             }
         }
@@ -100,8 +100,6 @@ pub async fn add_zettel(llm_client: &mut LlmClient, parents: &Vec<Zettel>) -> Re
     Ok(())
 }
 
-
-
 pub fn combine_zettel_contents(zettels: Vec<Zettel>) -> String {
     zettels
         .iter()
@@ -109,8 +107,6 @@ pub fn combine_zettel_contents(zettels: Vec<Zettel>) -> String {
         .collect::<Vec<&str>>()
         .join("\n\n")
 }
-
-
 
 pub async fn add_combined_zettel(llm_client: &mut LlmClient) -> Result<(), Box<dyn Error>> {
     println!("What topic would you like to write about?");
@@ -134,11 +130,11 @@ pub async fn add_combined_zettel(llm_client: &mut LlmClient) -> Result<(), Box<d
                     Ok(_) => {
                         tx.commit()?;
                         println!("Application finished successfully.");
-                    },
+                    }
                     Err(e) => {
                         tx.rollback()?;
                         eprintln!("Error storing content: {}", e)
-                    },
+                    }
                 }
             }
         }
@@ -148,7 +144,10 @@ pub async fn add_combined_zettel(llm_client: &mut LlmClient) -> Result<(), Box<d
     Ok(())
 }
 
-pub async fn find_zettels(llm_client: &mut LlmClient, query: &str) -> Result<Vec<Zettel>, rusqlite::Error> {
+pub async fn find_zettels(
+    llm_client: &mut LlmClient,
+    query: &str,
+) -> Result<Vec<Zettel>, rusqlite::Error> {
     let query_embedding = match llm_client.embed(query).await {
         Ok(result) => result,
         Err(e) => {
@@ -164,7 +163,6 @@ pub async fn find_zettels(llm_client: &mut LlmClient, query: &str) -> Result<Vec
 
     Ok(zettels)
 }
-
 
 pub async fn promote_zettel(zettel: Zettel, title: &str) -> Result<Article, rusqlite::Error> {
     let mut conn = get_db("my_thoughts.db").await?;

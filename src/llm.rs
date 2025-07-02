@@ -1,8 +1,10 @@
 use async_openai::Client;
 use async_openai::config::OpenAIConfig;
-use async_openai::types::{ChatCompletionRequestSystemMessageArgs, ChatCompletionRequestUserMessageArgs, CreateChatCompletionRequestArgs, CreateEmbeddingRequestArgs};
+use async_openai::types::{
+    ChatCompletionRequestSystemMessageArgs, ChatCompletionRequestUserMessageArgs,
+    CreateChatCompletionRequestArgs, CreateEmbeddingRequestArgs,
+};
 use std::error::Error;
-
 
 #[derive(Debug, Clone)]
 pub struct LlmClient {
@@ -12,9 +14,13 @@ pub struct LlmClient {
     pub chat_model: String,
 }
 
-
 impl LlmClient {
-    pub fn new(api_base: String, api_key: String, embedding_model: String, chat_model: String) -> Self {
+    pub fn new(
+        api_base: String,
+        api_key: String,
+        embedding_model: String,
+        chat_model: String,
+    ) -> Self {
         LlmClient {
             api_base,
             api_key,
@@ -43,7 +49,6 @@ impl LlmClient {
     }
 
     pub async fn chat(&mut self, prompt: &str) -> Result<(), Box<dyn Error>> {
-
         let client = Client::with_config(
             OpenAIConfig::new()
                 .with_api_base(self.api_base.clone())
@@ -78,5 +83,3 @@ impl LlmClient {
         Ok(())
     }
 }
-
-

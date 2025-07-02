@@ -1,6 +1,6 @@
 use include_dir::{Dir, include_dir};
-use rusqlite::{Connection, Transaction};
 use rusqlite::ffi::sqlite3_auto_extension;
+use rusqlite::{Connection, Transaction};
 use rusqlite_migration::Migrations;
 use sqlite_vec::sqlite3_vec_init;
 use std::sync::LazyLock;
@@ -27,7 +27,12 @@ pub async fn get_db(db_url: &str) -> Result<Connection, rusqlite::Error> {
     Ok(conn)
 }
 
-pub async fn store_zettel(tx: &Transaction<'_>, content: &str, embedding: Vec<f32>, parent_ids: Vec<i64>) -> Result<(), rusqlite::Error> {
+pub async fn store_zettel(
+    tx: &Transaction<'_>,
+    content: &str,
+    embedding: Vec<f32>,
+    parent_ids: Vec<i64>,
+) -> Result<(), rusqlite::Error> {
     let zettel: Zettel = tx
         .prepare("insert into zettel (content) values (?) returning id, content, created_at")?
         .query_one((content,), |row| {
@@ -44,7 +49,8 @@ pub async fn store_zettel(tx: &Transaction<'_>, content: &str, embedding: Vec<f3
     tx.prepare("insert into zettel_edge (node_id) values (?)")?
         .execute(rusqlite::params![zettel.id])?;
 
-    let mut insert_zettel_edge_stmt = tx.prepare("insert into zettel_edge (node_id, parent_id) values (?, ?)")?;
+    let mut insert_zettel_edge_stmt =
+        tx.prepare("insert into zettel_edge (node_id, parent_id) values (?, ?)")?;
     for id in parent_ids {
         insert_zettel_edge_stmt.execute(rusqlite::params![zettel.id, id])?;
     }
@@ -52,15 +58,14 @@ pub async fn store_zettel(tx: &Transaction<'_>, content: &str, embedding: Vec<f3
     Ok(())
 }
 
-
 pub async fn find_zettel_by_id(tx: &Transaction<'_>, id: i64) -> Result<Zettel, rusqlite::Error> {
     let mut stmt = tx.prepare(
         "
         select id, content, created_at
         from zettel
         where id = ?
-        "
-        )?;
+        ",
+    )?;
 
     let zettel = stmt.query_one([id], |row| {
         Ok(Zettel {
@@ -73,8 +78,10 @@ pub async fn find_zettel_by_id(tx: &Transaction<'_>, id: i64) -> Result<Zettel, 
     Ok(zettel)
 }
 
-
-pub async fn find_zettels_by_embedding(tx: &Transaction<'_>, embedding: Vec<f32>) -> Result<Vec<Zettel>, rusqlite::Error> {
+pub async fn find_zettels_by_embedding(
+    tx: &Transaction<'_>,
+    embedding: Vec<f32>,
+) -> Result<Vec<Zettel>, rusqlite::Error> {
     let mut stmt = tx.prepare(
         "
         select id, content, created_at
@@ -82,24 +89,21 @@ pub async fn find_zettels_by_embedding(tx: &Transaction<'_>, embedding: Vec<f32>
         join zettel_embedding ze on z.id = ze.zettel_id
         where ze.embedding match ?
         and k = 3
-        "
-        )?;
+        ",
+    )?;
 
-    let thoughts: Vec<Zettel> = stmt.query_map(
-        [embedding.as_bytes()],
-        |row| {
+    let thoughts: Vec<Zettel> = stmt
+        .query_map([embedding.as_bytes()], |row| {
             Ok(Zettel {
                 id: row.get(0)?,
                 content: row.get(1)?,
                 created_at: row.get(2)?,
             })
-        },
-    )?
+        })?
         .collect::<Result<Vec<Zettel>, rusqlite::Error>>()?;
 
     Ok(thoughts)
 }
-
 
 pub async fn store_article(
     tx: &Transaction<'_>,
@@ -113,7 +117,7 @@ pub async fn store_article(
             insert into article (zettel_id , title , content)
             values (?, ?, ?)
             returning id, zettel_id, title, content, created_at
-            "
+            ",
         )?
         .query_one((zettel_id, title, content), |row| {
             Ok(Article {
@@ -126,6 +130,3 @@ pub async fn store_article(
         })?;
     Ok(article)
 }
-
-
-

@@ -1,6 +1,9 @@
-use tsh::{add_combined_zettel, add_zettel, db::{find_zettel_by_id, get_db, migrate_to_latest}, llm::LlmClient};
 use std::error::Error;
-
+use tsh::{
+    add_combined_zettel, add_zettel,
+    db::{find_zettel_by_id, get_db, migrate_to_latest},
+    llm::LlmClient,
+};
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn Error>> {
