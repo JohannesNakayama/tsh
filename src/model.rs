@@ -6,7 +6,7 @@ pub struct Zettel {
 }
 
 #[derive(Debug, Clone)]
-pub struct Edge {
+pub struct ZettelEdge {
     pub node_id: i64,
     pub parent_id: Option<i64>,
 }

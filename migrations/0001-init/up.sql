@@ -9,7 +9,7 @@ create virtual table zettel_embedding using vec0(
   , embedding  float[384] -- embedding shouldn't be null (but not null constraint doesn't work with sqlite-vec)
 );
 
-create table edge (
+create table zettel_edge (
     node_id   integer not null references zettel(id)
   , parent_id integer          references zettel(id) default null -- nullable
   , primary key (node_id, parent_id)

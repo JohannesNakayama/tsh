@@ -41,12 +41,12 @@ pub async fn store_zettel(tx: &Transaction<'_>, content: &str, embedding: Vec<f3
     tx.prepare("insert into zettel_embedding (zettel_id, embedding) values (?, ?)")?
         .execute(rusqlite::params![zettel.id, embedding.as_bytes()])?;
 
-    tx.prepare("insert into edge (node_id) values (?)")?
+    tx.prepare("insert into zettel_edge (node_id) values (?)")?
         .execute(rusqlite::params![zettel.id])?;
 
-    let mut insert_edge_stmt = tx.prepare("insert into edge (node_id, parent_id) values (?, ?)")?;
+    let mut insert_zettel_edge_stmt = tx.prepare("insert into zettel_edge (node_id, parent_id) values (?, ?)")?;
     for id in parent_ids {
-        insert_edge_stmt.execute(rusqlite::params![zettel.id, id])?;
+        insert_zettel_edge_stmt.execute(rusqlite::params![zettel.id, id])?;
     }
 
     Ok(())
