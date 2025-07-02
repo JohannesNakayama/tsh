@@ -5,7 +5,7 @@ use std::process::{Command, Stdio};
 use tempfile::NamedTempFile;
 use std::time::{SystemTime, UNIX_EPOCH};
 
-use crate::db::{find_thoughts_by_embedding, get_db, store_zettel};
+use crate::db::{find_zettels_by_embedding, get_db, store_zettel};
 use crate::llm::LlmClient;
 use crate::model::Zettel;
 
@@ -73,10 +73,8 @@ pub fn get_user_input() -> String {
 }
 
 
-pub async fn add_thought(llm_client: &mut LlmClient) -> Result<(), Box<dyn Error>> {
-    let initial_thought = get_user_input();
-
-    match open_and_edit_neovim_buffer(Some(&initial_thought)) {
+pub async fn add_zettel(llm_client: &mut LlmClient, parents: &Vec<Zettel>) -> Result<(), Box<dyn Error>> {
+    match open_and_edit_neovim_buffer(Some(combine_zettel_contents(parents.to_vec()).as_str())) {
         Ok(edited_content) => {
             println!("\nNeovim closed. Edited content retrieved:");
             println!("```");
@@ -84,9 +82,11 @@ pub async fn add_thought(llm_client: &mut LlmClient) -> Result<(), Box<dyn Error
             println!("```");
 
             if let Ok(embedding) = llm_client.embed(&edited_content).await {
+                let parent_ids = parents.iter().map(|zettel| zettel.id).collect();
+
                 let mut conn = get_db("my_thoughts.db").await?;
                 let tx = conn.transaction()?;
-                match store_zettel(&tx, &edited_content, embedding.clone(), vec![]).await {
+                match store_zettel(&tx, &edited_content, embedding.clone(), parent_ids).await {
                     Ok(_) => {
                         tx.commit()?;
                         println!("Application finished successfully.");
@@ -104,14 +104,14 @@ pub async fn add_thought(llm_client: &mut LlmClient) -> Result<(), Box<dyn Error
     Ok(())
 }
 
-pub async fn combine_thoughts(thoughts: Vec<Zettel>) -> Result<String, Box<dyn Error>> {
-    let combined_thoughts = thoughts
-        .iter()
-        .map(|thought| thought.content.as_str())
-        .collect::<Vec<&str>>()
-        .join("\n\n");
 
-    Ok(combined_thoughts)
+
+pub fn combine_zettel_contents(zettels: Vec<Zettel>) -> String {
+    zettels
+        .iter()
+        .map(|zettel| zettel.content.as_str())
+        .collect::<Vec<&str>>()
+        .join("\n\n")
 }
 
 
@@ -120,7 +120,7 @@ pub async fn add_combined_thought(llm_client: &mut LlmClient) -> Result<(), Box<
     println!("What topic would you like to write about?");
     let query = get_user_input();
     let thoughts = find_thoughts(llm_client, &query).await?;
-    let buffer_content = combine_thoughts(thoughts.clone()).await?;
+    let buffer_content = combine_zettel_contents(thoughts.clone());
     match open_and_edit_neovim_buffer(Some(&buffer_content)) {
         Ok(edited_content) => {
             println!("\nNeovim closed. Edited content retrieved:");
@@ -163,7 +163,7 @@ pub async fn find_thoughts(llm_client: &mut LlmClient, query: &str) -> Result<Ve
 
     let mut conn = get_db("my_thoughts.db").await?;
     let tx = conn.transaction()?;
-    let thoughts: Vec<Zettel> = find_thoughts_by_embedding(&tx, query_embedding).await?;
+    let thoughts: Vec<Zettel> = find_zettels_by_embedding(&tx, query_embedding).await?;
     tx.commit()?;
 
     Ok(thoughts)
