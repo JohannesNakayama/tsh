@@ -12,20 +12,14 @@
 
 ## Next Steps
 
-- add timestamps to thoughts
+- promote thoughts to texts
+    - new struct for texts (with titles, etc.)
 
 - function for remixing only root ideas (otherwise the same idea could end up in a thought twice)
-
-- refactor database access
-    - encapsulate creation of database connections
-    - use transactions in storing functions (look into rusqlite docs)
 
 - add tagging
     - automatic tagging with ollama model
     - manual tagging for organization
-
-- promote thoughts to texts
-    - new struct for texts (with titles, etc.)
 
 - store thought on save of vim buffer
     - keep buffer open, then save again on close
