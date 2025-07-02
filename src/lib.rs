@@ -3,10 +3,11 @@ use std::fs;
 use std::io::{self, Read, Write};
 use std::process::{Command, Stdio};
 use tempfile::NamedTempFile;
+use std::time::{SystemTime, UNIX_EPOCH};
 
-use crate::db::{find_thoughts_by_embedding, get_db, store_atomic_thought, store_combined_thought};
+use crate::db::{find_thoughts_by_embedding, get_db, store_zettel};
 use crate::llm::LlmClient;
-use crate::model::Thought;
+use crate::model::Zettel;
 
 pub mod model;
 pub mod db;
@@ -85,7 +86,7 @@ pub async fn add_thought(llm_client: &mut LlmClient) -> Result<(), Box<dyn Error
             if let Ok(embedding) = llm_client.embed(&edited_content).await {
                 let mut conn = get_db("my_thoughts.db").await?;
                 let tx = conn.transaction()?;
-                match store_atomic_thought(&tx, &edited_content, embedding.clone()).await {
+                match store_zettel(&tx, &edited_content, embedding.clone(), vec![]).await {
                     Ok(_) => {
                         tx.commit()?;
                         println!("Application finished successfully.");
@@ -103,7 +104,7 @@ pub async fn add_thought(llm_client: &mut LlmClient) -> Result<(), Box<dyn Error
     Ok(())
 }
 
-pub async fn combine_thoughts(thoughts: Vec<Thought>) -> Result<String, Box<dyn Error>> {
+pub async fn combine_thoughts(thoughts: Vec<Zettel>) -> Result<String, Box<dyn Error>> {
     let combined_thoughts = thoughts
         .iter()
         .map(|thought| thought.content.as_str())
@@ -133,7 +134,7 @@ pub async fn add_combined_thought(llm_client: &mut LlmClient) -> Result<(), Box<
             let tx = conn.transaction()?;
 
             if let Ok(embedding) = llm_client.embed(&edited_content).await {
-                match store_combined_thought(&tx, &edited_content, embedding, parent_ids).await {
+                match store_zettel(&tx, &edited_content, embedding, parent_ids).await {
                     Ok(_) => {
                         tx.commit()?;
                         println!("Application finished successfully.");
@@ -151,7 +152,7 @@ pub async fn add_combined_thought(llm_client: &mut LlmClient) -> Result<(), Box<
     Ok(())
 }
 
-pub async fn find_thoughts(llm_client: &mut LlmClient, query: &str) -> Result<Vec<Thought>, rusqlite::Error> {
+pub async fn find_thoughts(llm_client: &mut LlmClient, query: &str) -> Result<Vec<Zettel>, rusqlite::Error> {
     let query_embedding = match llm_client.embed(query).await {
         Ok(result) => result,
         Err(e) => {
@@ -162,7 +163,16 @@ pub async fn find_thoughts(llm_client: &mut LlmClient, query: &str) -> Result<Ve
 
     let mut conn = get_db("my_thoughts.db").await?;
     let tx = conn.transaction()?;
-    let thoughts: Vec<Thought> = find_thoughts_by_embedding(&tx, query_embedding).await?;
+    let thoughts: Vec<Zettel> = find_thoughts_by_embedding(&tx, query_embedding).await?;
+    tx.commit()?;
 
     Ok(thoughts)
+}
+
+
+pub fn now_millis() -> u128 {
+    SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .expect("system time is before the unix epoch")
+        .as_millis()
 }

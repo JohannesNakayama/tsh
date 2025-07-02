@@ -16,7 +16,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
 
     let mut llm_client = LlmClient::new(api_base, api_key, embedding_model, chat_model);
 
-    // add_thought().await?;
+    // add_thought(&mut llm_client).await?;
     // chat().await?;
     add_combined_thought(&mut llm_client).await?;
 
