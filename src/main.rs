@@ -7,21 +7,22 @@ use ratatui::{
     text::{Line, Span, Text},
     widgets::{Block, List, ListItem, Paragraph},
 };
-use std::vec;
+use tsh::{db::{get_db, store_zettel}, llm::LlmClient};
+use std::{error::Error, vec};
 
 #[tokio::main]
-async fn main() -> Result<()> {
+async fn main() -> Result<(), Box<dyn Error>> {
     // TODO: load from config, not env
-    // let db_url = std::env::var("DATABASE_URL")?;
-    // let api_base = std::env::var("API_BASE")?;
-    // let api_key = std::env::var("API_KEY")?;
-    // let embedding_model = std::env::var("EMBEDDINGS_MODEL")?;
-    // let chat_model = std::env::var("CHAT_MODEL")?;
+    let db_url = std::env::var("DATABASE_URL")?;
+    let api_base = std::env::var("API_BASE")?;
+    let api_key = std::env::var("API_KEY")?;
+    let embedding_model = std::env::var("EMBEDDINGS_MODEL")?;
+    let chat_model = std::env::var("CHAT_MODEL")?;
 
     // TODO: is it a good idea to run this every time?
     // migrate_to_latest(&db_url).await?;
 
-    // let mut llm_client = LlmClient::new(api_base, api_key, embedding_model, chat_model);
+    let llm_client = LlmClient::new(api_base, api_key, embedding_model, chat_model);
 
     // let mut conn = get_db(&db_url).await?;
     // let tx = conn.transaction()?;
@@ -33,11 +34,10 @@ async fn main() -> Result<()> {
 
     color_eyre::install()?;
     let terminal = ratatui::init();
-    let app_result = App::new().run(terminal);
+    let _app_result = App::new(llm_client).run(terminal).await?;
     ratatui::restore();
-    app_result
 
-    // Ok(())
+    Ok(())
 }
 
 /// App holds the state of the application
@@ -50,6 +50,8 @@ struct App {
     input_mode: InputMode,
     /// History of recorded messages
     messages: Vec<String>,
+
+    llm_client: LlmClient,
 }
 
 enum InputMode {
@@ -58,12 +60,13 @@ enum InputMode {
 }
 
 impl App {
-    const fn new() -> Self {
+    const fn new(llm_client: LlmClient) -> Self {
         Self {
             input: String::new(),
             input_mode: InputMode::Normal,
             messages: Vec::new(),
             character_index: 0,
+            llm_client: llm_client,
         }
     }
 
@@ -125,13 +128,27 @@ impl App {
         self.character_index = 0;
     }
 
-    fn submit_message(&mut self) {
-        self.messages.push(self.input.clone());
+    async fn submit_message(&mut self) -> Result<(), Box<dyn Error>> {
+        if let Ok(embedding) = self.llm_client.embed(&self.input).await {
+            let mut conn = get_db("my_thoughts.db").await?;
+            let tx = conn.transaction()?;
+            match store_zettel(&tx, &self.input, embedding.clone(), vec![]).await {
+                Ok(_) => {
+                    tx.commit()?;
+                    println!("Application finished successfully.");
+                }
+                Err(e) => {
+                    tx.rollback()?;
+                    eprintln!("Error storing content: {}", e);
+                }
+            }
+        }
         self.input.clear();
         self.reset_cursor();
+        Ok(())
     }
 
-    fn run(mut self, mut terminal: DefaultTerminal) -> Result<()> {
+    async fn run(mut self, mut terminal: DefaultTerminal) -> Result<()> {
         loop {
             terminal.draw(|frame| self.draw(frame))?;
 
@@ -147,7 +164,15 @@ impl App {
                         _ => {}
                     },
                     InputMode::Editing if key.kind == KeyEventKind::Press => match key.code {
-                        KeyCode::Enter => self.submit_message(),
+                        KeyCode::Enter => match self.submit_message().await {
+                            Ok(_) => {
+                                self.input_mode = InputMode::Normal;
+                                self.reset_cursor();
+                            }
+                            Err(e) => {
+                                eprintln!("Error submitting message: {}", e);
+                            }
+                        },
                         KeyCode::Char(to_insert) => self.enter_char(to_insert),
                         KeyCode::Backspace => self.delete_char(),
                         KeyCode::Left => self.move_cursor_left(),
