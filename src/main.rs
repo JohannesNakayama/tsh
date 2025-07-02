@@ -1,4 +1,4 @@
-use tsh::{add_combined_thought, add_zettel, db::{find_zettel_by_id, get_db, migrate_to_latest}, llm::LlmClient};
+use tsh::{add_combined_zettel, add_zettel, db::{find_zettel_by_id, get_db, migrate_to_latest}, llm::LlmClient};
 use std::error::Error;
 
 
@@ -22,7 +22,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
     // tx.commit()?;
     add_zettel(&mut llm_client, &vec![]).await?;
     // chat().await?;
-    // add_combined_thought(&mut llm_client).await?;
+    // add_combined_zettel(&mut llm_client).await?;
 
     Ok(())
 }

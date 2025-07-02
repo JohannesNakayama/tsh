@@ -116,11 +116,11 @@ pub fn combine_zettel_contents(zettels: Vec<Zettel>) -> String {
 
 
 
-pub async fn add_combined_thought(llm_client: &mut LlmClient) -> Result<(), Box<dyn Error>> {
+pub async fn add_combined_zettel(llm_client: &mut LlmClient) -> Result<(), Box<dyn Error>> {
     println!("What topic would you like to write about?");
     let query = get_user_input();
-    let thoughts = find_thoughts(llm_client, &query).await?;
-    let buffer_content = combine_zettel_contents(thoughts.clone());
+    let zettels = find_zettels(llm_client, &query).await?;
+    let buffer_content = combine_zettel_contents(zettels.clone());
     match open_and_edit_neovim_buffer(Some(&buffer_content)) {
         Ok(edited_content) => {
             println!("\nNeovim closed. Edited content retrieved:");
@@ -128,7 +128,7 @@ pub async fn add_combined_thought(llm_client: &mut LlmClient) -> Result<(), Box<
             println!("{}", edited_content);
             println!("```");
 
-            let parent_ids: Vec<i64> = thoughts.iter().map(|t| t.id).collect();
+            let parent_ids: Vec<i64> = zettels.iter().map(|t| t.id).collect();
 
             let mut conn = get_db("my_thoughts.db").await?;
             let tx = conn.transaction()?;
@@ -152,7 +152,7 @@ pub async fn add_combined_thought(llm_client: &mut LlmClient) -> Result<(), Box<
     Ok(())
 }
 
-pub async fn find_thoughts(llm_client: &mut LlmClient, query: &str) -> Result<Vec<Zettel>, rusqlite::Error> {
+pub async fn find_zettels(llm_client: &mut LlmClient, query: &str) -> Result<Vec<Zettel>, rusqlite::Error> {
     let query_embedding = match llm_client.embed(query).await {
         Ok(result) => result,
         Err(e) => {
@@ -163,10 +163,10 @@ pub async fn find_thoughts(llm_client: &mut LlmClient, query: &str) -> Result<Ve
 
     let mut conn = get_db("my_thoughts.db").await?;
     let tx = conn.transaction()?;
-    let thoughts: Vec<Zettel> = find_zettels_by_embedding(&tx, query_embedding).await?;
+    let zettels: Vec<Zettel> = find_zettels_by_embedding(&tx, query_embedding).await?;
     tx.commit()?;
 
-    Ok(thoughts)
+    Ok(zettels)
 }
 
 
