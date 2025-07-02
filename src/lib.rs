@@ -4,9 +4,9 @@ use std::io::{self, Read, Write};
 use std::process::{Command, Stdio};
 use tempfile::NamedTempFile;
 
-use crate::db::{find_zettels_by_embedding, get_db, store_zettel};
+use crate::db::{find_zettels_by_embedding, get_db, store_article, store_zettel};
 use crate::llm::LlmClient;
-use crate::model::Zettel;
+use crate::model::{Article, Zettel};
 
 pub mod model;
 pub mod db;
@@ -24,7 +24,7 @@ pub mod llm;
 /// or `Err(Box<dyn std::error::Error>)` if an error occurs.
 pub fn open_and_edit_neovim_buffer(
     initial_content: Option<&str>,
-) -> Result<String, Box<dyn std::error::Error>> {
+) -> Result<String, Box<dyn Error>> {
     let mut temp_file = NamedTempFile::new()?;
     let temp_file_path = temp_file.path().to_owned();
 
@@ -32,9 +32,6 @@ pub fn open_and_edit_neovim_buffer(
         temp_file.write_all(content.as_bytes())?;
         temp_file.flush()?; // ensure all data is written to disk before Neovim opens
     }
-
-    println!("Opening Neovim at: {}", temp_file_path.display());
-    println!("Edit the content and save/quit Neovim (e.g., :wq or :x) to continue...");
 
     // Spawn Neovim as a child process.
     // We direct stdin/stdout/stderr to inherit from the parent process so the user can interact.
@@ -168,3 +165,11 @@ pub async fn find_zettels(llm_client: &mut LlmClient, query: &str) -> Result<Vec
     Ok(zettels)
 }
 
+
+pub async fn promote_zettel(zettel: Zettel, title: &str) -> Result<Article, rusqlite::Error> {
+    let mut conn = get_db("my_thoughts.db").await?;
+    let tx = conn.transaction()?;
+    let article = store_article(&tx, zettel.id, title, &zettel.content).await?;
+    tx.commit()?;
+    Ok(article)
+}

@@ -6,7 +6,7 @@ use sqlite_vec::sqlite3_vec_init;
 use std::sync::LazyLock;
 use zerocopy::IntoBytes;
 
-use crate::model::Zettel;
+use crate::model::{Article, Zettel};
 
 static MIGRATIONS_DIR: Dir = include_dir!("$CARGO_MANIFEST_DIR/migrations");
 
@@ -99,4 +99,33 @@ pub async fn find_zettels_by_embedding(tx: &Transaction<'_>, embedding: Vec<f32>
 
     Ok(thoughts)
 }
+
+
+pub async fn store_article(
+    tx: &Transaction<'_>,
+    zettel_id: i64,
+    title: &str,
+    content: &str,
+) -> Result<Article, rusqlite::Error> {
+    let article: Article = tx
+        .prepare(
+            "
+            insert into article (zettel_id , title , content)
+            values (?, ?, ?)
+            returning id, zettel_id, title, content, created_at
+            "
+        )?
+        .query_one((zettel_id, title, content), |row| {
+            Ok(Article {
+                id: row.get(0)?,
+                zettel_id: row.get(1)?,
+                title: row.get(2)?,
+                content: row.get(3)?,
+                created_at: row.get(4)?,
+            })
+        })?;
+    Ok(article)
+}
+
+
 

@@ -4,3 +4,5 @@ drop table zettel_embedding;
 
 drop table zettel_edge;
 
+drop table article;
+
