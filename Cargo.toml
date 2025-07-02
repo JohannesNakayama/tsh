@@ -13,3 +13,6 @@ rusqlite = { version = "0.36.0", features = ["bundled"] }
 zerocopy = "0.8.26"
 include_dir = "0.7.4"
 rusqlite_migration = { version = "2.2.0", features = ["from-directory"] }
+ratatui = "0.29.0"
+crossterm = "0.29.0"
+color-eyre = "0.6.5"
