@@ -4,13 +4,15 @@ use std::error::Error;
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn Error>> {
-    migrate_to_latest("my_thoughts.db").await?;
-
     // TODO: load from config, not env
+    let db_url = std::env::var("DATABASE_URL")?;
     let api_base = std::env::var("API_BASE")?;
     let api_key = std::env::var("API_KEY")?;
     let embedding_model = std::env::var("EMBEDDINGS_MODEL")?;
     let chat_model = std::env::var("CHAT_MODEL")?;
+
+    // TODO: is it a good idea to run this every time?
+    migrate_to_latest(&db_url).await?;
 
     let mut llm_client = LlmClient::new(api_base, api_key, embedding_model, chat_model);
 
