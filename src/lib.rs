@@ -66,6 +66,7 @@ pub fn get_user_input() -> String {
     input.trim().to_string()
 }
 
+// TODO: separate workflow from logic here
 pub async fn add_zettel(
     llm_client: &mut LlmClient,
     parents: &Vec<Zettel>,
