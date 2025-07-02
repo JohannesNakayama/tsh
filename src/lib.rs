@@ -3,7 +3,6 @@ use std::fs;
 use std::io::{self, Read, Write};
 use std::process::{Command, Stdio};
 use tempfile::NamedTempFile;
-use std::time::{SystemTime, UNIX_EPOCH};
 
 use crate::db::{find_zettels_by_embedding, get_db, store_zettel};
 use crate::llm::LlmClient;
@@ -169,10 +168,3 @@ pub async fn find_zettels(llm_client: &mut LlmClient, query: &str) -> Result<Vec
     Ok(zettels)
 }
 
-
-pub fn now_millis() -> u128 {
-    SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .expect("system time is before the unix epoch")
-        .as_millis()
-}
