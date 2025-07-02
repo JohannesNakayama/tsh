@@ -1,6 +1,6 @@
-drop table thoughts;
+drop table zettel;
 
-drop table thought_embedding;
+drop table zettel_embedding;
 
-drop table graph;
+drop table zettel_edge;
 
