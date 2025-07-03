@@ -7,7 +7,7 @@ use ratatui::{
     text::{Line, Span, Text},
     widgets::{Block, List, ListItem, Paragraph},
 };
-use tsh::{db::{get_db, store_zettel}, llm::LlmClient};
+use tsh::{db::{get_db, store_zettel}, find_zettels, llm::LlmClient};
 use std::{error::Error, vec};
 
 #[tokio::main]
@@ -48,7 +48,7 @@ struct App {
     character_index: usize,
     /// Current input mode
     input_mode: InputMode,
-    /// History of recorded messages
+    /// Search results
     messages: Vec<String>,
 
     llm_client: LlmClient,
@@ -129,20 +129,14 @@ impl App {
     }
 
     async fn submit_message(&mut self) -> Result<(), Box<dyn Error>> {
-        if let Ok(embedding) = self.llm_client.embed(&self.input).await {
-            let mut conn = get_db("my_thoughts.db").await?;
-            let tx = conn.transaction()?;
-            match store_zettel(&tx, &self.input, embedding.clone(), vec![]).await {
-                Ok(_) => {
-                    tx.commit()?;
-                    println!("Application finished successfully.");
-                }
-                Err(e) => {
-                    tx.rollback()?;
-                    eprintln!("Error storing content: {}", e);
-                }
-            }
-        }
+        match find_zettels(&mut self.llm_client, &self.input).await {
+            Ok(zettels) => {
+                self.messages = zettels.iter().map(|zettel| zettel.content.clone()).collect();
+            },
+            Err(e) => {
+                eprintln!("Error retrieving zettels: {}", e);
+            },
+        };
         self.input.clear();
         self.reset_cursor();
         Ok(())
@@ -211,7 +205,7 @@ impl App {
                     "Esc".bold(),
                     " to stop editing, ".into(),
                     "Enter".bold(),
-                    " to record the message".into(),
+                    " to submit search query".into(),
                 ],
                 Style::default(),
             ),
@@ -252,7 +246,7 @@ impl App {
                 ListItem::new(content)
             })
             .collect();
-        let messages = List::new(messages).block(Block::bordered().title("Messages"));
+        let messages = List::new(messages).block(Block::bordered().title("Search Results"));
         frame.render_widget(messages, messages_area);
     }
 }
