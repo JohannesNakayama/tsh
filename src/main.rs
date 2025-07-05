@@ -1,5 +1,5 @@
-use tsh::{llm::LlmClient, tui::{app::MainMenuModel}};
 use std::error::Error;
+use tsh::{llm::LlmClient, tui::app::MainMenu};
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn Error>> {
@@ -24,9 +24,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
     // add_combined_zettel(&mut llm_client).await?;
 
     color_eyre::install()?; // TODO: where best to call this?
-    let _app_result = MainMenuModel::new(llm_client).run().await?;
+    let _app_result = MainMenu::new(llm_client).run().await?;
 
     Ok(())
 }
-
-

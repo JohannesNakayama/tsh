@@ -1,8 +1,10 @@
 use ratatui::{
+    DefaultTerminal, Frame,
     crossterm::event::{self, Event, KeyCode},
     layout::{Constraint, Direction, Layout},
-    style::{Style, Color},
-    widgets::{Block, BorderType, Borders, Paragraph}, DefaultTerminal, Frame};
+    style::{Color, Style},
+    widgets::{Block, BorderType, Borders, Paragraph},
+};
 use std::error::Error;
 
 pub enum InputMode {
@@ -10,20 +12,19 @@ pub enum InputMode {
     Normal,
 }
 
-
-pub struct SearchFeatureModel {
+pub struct SearchFeature {
     input: String,
     input_mode: InputMode,
     terminal: DefaultTerminal,
 }
 
-impl SearchFeatureModel {
+impl SearchFeature {
     pub fn default() -> Self {
         let terminal = ratatui::init();
-        SearchFeatureModel {
+        SearchFeature {
             input: String::new(),
             input_mode: InputMode::Normal,
-            terminal: terminal
+            terminal: terminal,
         }
     }
 
@@ -36,23 +37,23 @@ impl SearchFeatureModel {
                     InputMode::Normal => match key.code {
                         KeyCode::Char('i') => {
                             self.input_mode = InputMode::Insert;
-                        },
+                        }
                         KeyCode::Esc => {
                             break;
-                        },
-                        _ => {},
+                        }
+                        _ => {}
                     },
                     InputMode::Insert => match key.code {
                         KeyCode::Esc => {
                             self.input_mode = InputMode::Normal;
-                        },
+                        }
                         KeyCode::Char(c) => {
                             self.input.push(c);
-                        },
+                        }
                         KeyCode::Backspace => {
                             self.input.pop();
                         }
-                        _ => {},
+                        _ => {}
                     },
                 }
             }
@@ -62,16 +63,12 @@ impl SearchFeatureModel {
     }
 }
 
-
 pub fn draw_search_page(frame: &mut Frame, search_input: &str) {
     let search_layout = Layout::new(
         Direction::Vertical,
-        [
-            Constraint::Length(3),
-            Constraint::Min(0),
-        ],
+        [Constraint::Length(3), Constraint::Min(0)],
     )
-        .split(frame.area());
+    .split(frame.area());
 
     let search_input = Paragraph::new(search_input)
         .style(Style::default().fg(Color::White))
@@ -79,9 +76,8 @@ pub fn draw_search_page(frame: &mut Frame, search_input: &str) {
             Block::default()
                 .borders(Borders::ALL)
                 .border_type(BorderType::Rounded)
-                .title("Input")
+                .title("Input"),
         );
 
     frame.render_widget(search_input, search_layout[0]);
 }
-

@@ -1,15 +1,20 @@
-use ratatui::{crossterm::event::{self, Event, KeyCode}, layout::{Constraint, Direction, Layout}, style::{Color, Modifier, Style}, widgets::{List, ListItem}, DefaultTerminal, Frame};
+use ratatui::{
+    DefaultTerminal, Frame,
+    crossterm::event::{self, Event, KeyCode},
+    layout::{Constraint, Direction, Layout},
+    style::{Color, Modifier, Style},
+    widgets::{List, ListItem},
+};
 use std::error::Error;
 
-use crate::{add_zettel, llm::LlmClient, tui::search::SearchFeatureModel};
+use crate::{add_zettel, llm::LlmClient, tui::search::SearchFeature};
 
 pub enum Feature {
     EnterZettel,
     SearchZettels,
 }
 
-
-pub struct MainMenuModel {
+pub struct MainMenu {
     exit: bool,
     llm_client: LlmClient,
     features: Vec<Feature>,
@@ -17,8 +22,7 @@ pub struct MainMenuModel {
     terminal: DefaultTerminal,
 }
 
-
-impl MainMenuModel {
+impl MainMenu {
     pub fn new(llm_client: LlmClient) -> Self {
         let exit = false;
         let features = vec![Feature::EnterZettel, Feature::SearchZettels];
@@ -38,34 +42,38 @@ impl MainMenuModel {
         loop {
             // draw frame
             let selected_feature = self.selected_feature;
-            self.terminal.draw(|f| draw_main_menu(f, selected_feature))?;
+            self.terminal.draw(|f| view(f, selected_feature))?;
 
             // handle events
             if let Event::Key(key) = event::read()? {
                 match key.code {
                     KeyCode::Char('q') => {
                         self.exit = true;
-                    },
+                    }
                     KeyCode::Down => {
                         self.selected_feature = match self.selected_feature {
-                            Some(feature_idx) => if feature_idx == (self.features.len() - 1) {
-                                Some(feature_idx)
-                            } else {
-                                Some(feature_idx + 1)
-                            },
+                            Some(feature_idx) => {
+                                if feature_idx == (self.features.len() - 1) {
+                                    Some(feature_idx)
+                                } else {
+                                    Some(feature_idx + 1)
+                                }
+                            }
                             None => Some(0),
                         };
-                    },
+                    }
                     KeyCode::Up => {
                         self.selected_feature = match self.selected_feature {
-                            Some(feature_idx) => if feature_idx == 0 {
-                                Some(feature_idx)
-                            } else {
-                                Some(feature_idx - 1)
-                            },
+                            Some(feature_idx) => {
+                                if feature_idx == 0 {
+                                    Some(feature_idx)
+                                } else {
+                                    Some(feature_idx - 1)
+                                }
+                            }
                             None => Some(self.features.len() - 1),
                         };
-                    },
+                    }
                     // Execute feature
                     KeyCode::Enter => {
                         if let Some(selected_feature) = self.selected_feature {
@@ -74,20 +82,20 @@ impl MainMenuModel {
                                 Feature::EnterZettel => {
                                     add_zettel(&mut self.llm_client, &vec![]).await?;
                                     let selected_feature = self.selected_feature;
-                                    self.terminal.draw(|f| draw_main_menu(f, selected_feature))?;
+                                    self.terminal.draw(|f| view(f, selected_feature))?;
                                     ratatui::restore();
                                     self.terminal = ratatui::init();
-                                },
+                                }
                                 Feature::SearchZettels => {
-                                    let mut search_feature = SearchFeatureModel::default();
+                                    let mut search_feature = SearchFeature::default();
                                     search_feature.run()?;
                                     ratatui::restore();
                                     self.terminal = ratatui::init();
-                                },
+                                }
                             };
                         }
                     }
-                    _ => {},
+                    _ => {}
                 }
             }
 
@@ -100,15 +108,9 @@ impl MainMenuModel {
     }
 }
 
-pub fn draw_main_menu(frame: &mut Frame, selected_feature: Option<usize>) {
-    let main_menu_layout = Layout::new(
-        Direction::Vertical,
-        [
-            Constraint::Length(4),
-            Constraint::Min(0),
-        ],
-    )
-        .split(frame.area());
+fn view(frame: &mut Frame, selected_feature: Option<usize>) {
+    let main_menu_layout =
+        Layout::new(Direction::Vertical, [Constraint::Length(4)]).split(frame.area());
 
     let menu_items: Vec<ListItem> = vec![Feature::EnterZettel, Feature::SearchZettels]
         .iter()
@@ -120,7 +122,11 @@ pub fn draw_main_menu(frame: &mut Frame, selected_feature: Option<usize>) {
             };
             let mut menu_item = ListItem::new(menu_entry);
             if Some(i) == selected_feature {
-                menu_item = menu_item.style(Style::default().fg(Color::LightGreen).add_modifier(Modifier::BOLD));
+                menu_item = menu_item.style(
+                    Style::default()
+                        .fg(Color::LightGreen)
+                        .add_modifier(Modifier::BOLD),
+                );
             }
             menu_item
         })
@@ -130,4 +136,3 @@ pub fn draw_main_menu(frame: &mut Frame, selected_feature: Option<usize>) {
 
     frame.render_widget(menu, main_menu_layout[0]);
 }
-
