@@ -70,7 +70,7 @@ impl App {
         loop {
             // draw frame
             let selected_feature = self.selected_feature;
-            self.terminal.draw(|f| draw_ui(f, selected_feature))?;
+            self.terminal.draw(|f| draw_main_menu(f, selected_feature))?;
 
             // handle events
             if let Event::Key(key) = event::read()? {
@@ -106,7 +106,7 @@ impl App {
                                 Feature::EnterZettel => {
                                     add_zettel(&mut self.llm_client, &vec![]).await?;
                                     let selected_feature = self.selected_feature;
-                                    self.terminal.draw(|f| draw_ui(f, selected_feature))?;
+                                    self.terminal.draw(|f| draw_main_menu(f, selected_feature))?;
                                     ratatui::restore();
                                     self.terminal = ratatui::init();
                                 },
@@ -126,7 +126,7 @@ impl App {
     }
 }
 
-pub fn draw_ui(frame: &mut Frame, selected_feature: Option<usize>) {
+pub fn draw_main_menu(frame: &mut Frame, selected_feature: Option<usize>) {
     let main_menu_layout = Layout::new(
         Direction::Vertical,
         [
