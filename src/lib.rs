@@ -11,7 +11,10 @@ use crate::model::{Article, Zettel};
 pub mod db;
 pub mod llm;
 pub mod model;
-// pub mod search_page;
+pub mod tui {
+    pub mod app;
+    pub mod search;
+}
 
 /// Opens Neovim with a temporary buffer, optionally populated with initial data.
 /// It waits for Neovim to close, then returns the final content of the buffer.
