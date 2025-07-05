@@ -52,7 +52,7 @@ impl App {
     fn new(llm_client: LlmClient) -> Self {
         let exit = false;
         let features = vec![Feature::EnterZettel, Feature::SearchZettels];
-        let selected_feature = None;
+        let selected_feature = Some(0);
         let terminal = ratatui::init();
         Self {
             exit: exit,
