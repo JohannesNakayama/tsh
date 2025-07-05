@@ -73,10 +73,10 @@ pub async fn add_zettel(
 ) -> Result<(), Box<dyn Error>> {
     match open_and_edit_neovim_buffer(Some(combine_zettel_contents(parents.to_vec()).as_str())) {
         Ok(edited_content) => {
-            println!("\nNeovim closed. Edited content retrieved:");
-            println!("```");
-            println!("{}", edited_content);
-            println!("```");
+            // println!("\nNeovim closed. Edited content retrieved:");
+            // println!("```");
+            // println!("{}", edited_content);
+            // println!("```");
 
             if let Ok(embedding) = llm_client.embed(&edited_content).await {
                 let parent_ids = parents.iter().map(|zettel| zettel.id).collect();
@@ -86,11 +86,11 @@ pub async fn add_zettel(
                 match store_zettel(&tx, &edited_content, embedding.clone(), parent_ids).await {
                     Ok(_) => {
                         tx.commit()?;
-                        println!("Application finished successfully.");
+                        // println!("Application finished successfully.");
                     }
-                    Err(e) => {
+                    Err(_) => {
                         tx.rollback()?;
-                        eprintln!("Error storing content: {}", e);
+                        // eprintln!("Error storing content: {}", e);
                     }
                 }
             }
@@ -116,10 +116,10 @@ pub async fn add_combined_zettel(llm_client: &mut LlmClient) -> Result<(), Box<d
     let buffer_content = combine_zettel_contents(zettels.clone());
     match open_and_edit_neovim_buffer(Some(&buffer_content)) {
         Ok(edited_content) => {
-            println!("\nNeovim closed. Edited content retrieved:");
-            println!("```");
-            println!("{}", edited_content);
-            println!("```");
+            // println!("\nNeovim closed. Edited content retrieved:");
+            // println!("```");
+            // println!("{}", edited_content);
+            // println!("```");
 
             let parent_ids: Vec<i64> = zettels.iter().map(|t| t.id).collect();
 
@@ -130,11 +130,11 @@ pub async fn add_combined_zettel(llm_client: &mut LlmClient) -> Result<(), Box<d
                 match store_zettel(&tx, &edited_content, embedding, parent_ids).await {
                     Ok(_) => {
                         tx.commit()?;
-                        println!("Application finished successfully.");
+                        // println!("Application finished successfully.");
                     }
-                    Err(e) => {
+                    Err(_) => {
                         tx.rollback()?;
-                        eprintln!("Error storing content: {}", e)
+                        // eprintln!("Error storing content: {}", e)
                     }
                 }
             }

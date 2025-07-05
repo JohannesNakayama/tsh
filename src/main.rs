@@ -1,19 +1,13 @@
-use color_eyre::Result;
-use crossterm::event::{self, Event, KeyCode, KeyEventKind};
 use ratatui::{
-    DefaultTerminal, Frame,
-    layout::{Constraint, Layout, Position},
-    style::{Color, Modifier, Style, Stylize},
-    text::{Line, Span, Text},
-    widgets::{Block, List, ListItem, Paragraph},
+    crossterm::event::{self, Event, KeyCode}, layout::{Constraint, Direction, Layout}, style::{Color, Modifier, Style}, widgets::{List, ListItem}, DefaultTerminal, Frame
 };
-use tsh::{db::{get_db, store_zettel}, find_zettels, llm::LlmClient};
-use std::{error::Error, vec};
+use tsh::{add_zettel, llm::LlmClient};
+use std::error::Error;
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn Error>> {
     // TODO: load from config, not env
-    let db_url = std::env::var("DATABASE_URL")?;
+    // let db_url = std::env::var("DATABASE_URL")?;
     let api_base = std::env::var("API_BASE")?;
     let api_key = std::env::var("API_KEY")?;
     let embedding_model = std::env::var("EMBEDDINGS_MODEL")?;
@@ -40,213 +34,145 @@ async fn main() -> Result<(), Box<dyn Error>> {
     Ok(())
 }
 
-/// App holds the state of the application
-struct App {
-    /// Current value of the input box
-    input: String,
-    /// Position of cursor in the editor area.
-    character_index: usize,
-    /// Current input mode
-    input_mode: InputMode,
-    /// Search results
-    messages: Vec<String>,
 
+pub enum Feature {
+    EnterZettel,
+    SearchZettels,
+}
+
+
+pub struct App {
+    exit: bool,
     llm_client: LlmClient,
+    features: Vec<Feature>,
+    selected_feature: Option<usize>,
 }
 
-enum InputMode {
-    Normal,
-    Editing,
-}
 
 impl App {
-    const fn new(llm_client: LlmClient) -> Self {
+    fn new(llm_client: LlmClient) -> Self {
+        let exit = false;
+        let features = vec![Feature::EnterZettel, Feature::SearchZettels];
+        let selected_feature = None;
         Self {
-            input: String::new(),
-            input_mode: InputMode::Normal,
-            messages: Vec::new(),
-            character_index: 0,
-            llm_client: llm_client,
+            exit,
+            llm_client,
+            features,
+            selected_feature
         }
     }
 
-    fn move_cursor_left(&mut self) {
-        let cursor_moved_left = self.character_index.saturating_sub(1);
-        self.character_index = self.clamp_cursor(cursor_moved_left);
-    }
+    async fn run(mut self, mut terminal: DefaultTerminal) -> Result<(), Box<dyn Error>> {
+        // The application's main loop
+        loop {
+            // draw frame
+            terminal.draw(|f| self.draw(f))?;
 
-    fn move_cursor_right(&mut self) {
-        let cursor_moved_right = self.character_index.saturating_add(1);
-        self.character_index = self.clamp_cursor(cursor_moved_right);
-    }
+            // handle events
+            if let Event::Key(key) = event::read()? {
+                match key.code {
+                    KeyCode::Char('q') => {
+                        self.exit = true;
+                    },
+                    KeyCode::Down => {
+                        self.selected_feature = match self.selected_feature {
+                            Some(feature_idx) => if feature_idx == (self.features.len() - 1) {
+                                Some(feature_idx)
+                            } else {
+                                Some(feature_idx + 1)
+                            },
+                            None => Some(0),
+                        };
+                    },
+                    KeyCode::Up => {
+                        self.selected_feature = match self.selected_feature {
+                            Some(feature_idx) => if feature_idx == 0 {
+                                Some(feature_idx)
+                            } else {
+                                Some(feature_idx - 1)
+                            },
+                            None => Some(self.features.len() - 1),
+                        };
+                    },
+                    // Execute feature
+                    KeyCode::Enter => {
+                        if let Some(selected_feature) = self.selected_feature {
+                            let feature = &self.features[selected_feature];
+                            match feature {
+                                Feature::EnterZettel => {
+                                    add_zettel(&mut self.llm_client, &vec![]).await?;
+                                    terminal.draw(|f| self.draw(f))?; // redraw ui after vim buffer
+                                                                      // exits
+                                },
+                                _ => {},
+                            };
+                        }
+                    }
+                    _ => {},
+                }
+            }
 
-    fn enter_char(&mut self, new_char: char) {
-        let index = self.byte_index();
-        self.input.insert(index, new_char);
-        self.move_cursor_right();
-    }
-
-    /// Returns the byte index based on the character position.
-    ///
-    /// Since each character in a string can be contain multiple bytes, it's necessary to calculate
-    /// the byte index based on the index of the character.
-    fn byte_index(&self) -> usize {
-        self.input
-            .char_indices()
-            .map(|(i, _)| i)
-            .nth(self.character_index)
-            .unwrap_or(self.input.len())
-    }
-
-    fn delete_char(&mut self) {
-        let is_not_cursor_leftmost = self.character_index != 0;
-        if is_not_cursor_leftmost {
-            // Method "remove" is not used on the saved text for deleting the selected char.
-            // Reason: Using remove on String works on bytes instead of the chars.
-            // Using remove would require special care because of char boundaries.
-
-            let current_index = self.character_index;
-            let from_left_to_current_index = current_index - 1;
-
-            // Getting all characters before the selected character.
-            let before_char_to_delete = self.input.chars().take(from_left_to_current_index);
-            // Getting all characters after selected character.
-            let after_char_to_delete = self.input.chars().skip(current_index);
-
-            // Put all characters together except the selected one.
-            // By leaving the selected one out, it is forgotten and therefore deleted.
-            self.input = before_char_to_delete.chain(after_char_to_delete).collect();
-            self.move_cursor_left();
+            if self.exit {
+                break;
+            }
         }
-    }
-
-    fn clamp_cursor(&self, new_cursor_pos: usize) -> usize {
-        new_cursor_pos.clamp(0, self.input.chars().count())
-    }
-
-    fn reset_cursor(&mut self) {
-        self.character_index = 0;
-    }
-
-    async fn submit_message(&mut self) -> Result<(), Box<dyn Error>> {
-        match find_zettels(&mut self.llm_client, &self.input).await {
-            Ok(zettels) => {
-                self.messages = zettels.iter().map(|zettel| zettel.content.clone()).collect();
-            },
-            Err(e) => {
-                eprintln!("Error retrieving zettels: {}", e);
-            },
-        };
-        self.input.clear();
-        self.reset_cursor();
         Ok(())
     }
 
-    async fn run(mut self, mut terminal: DefaultTerminal) -> Result<()> {
-        loop {
-            terminal.draw(|frame| self.draw(frame))?;
-
-            if let Event::Key(key) = event::read()? {
-                match self.input_mode {
-                    InputMode::Normal => match key.code {
-                        KeyCode::Char('e') => {
-                            self.input_mode = InputMode::Editing;
-                        }
-                        KeyCode::Char('q') => {
-                            return Ok(());
-                        }
-                        _ => {}
-                    },
-                    InputMode::Editing if key.kind == KeyEventKind::Press => match key.code {
-                        KeyCode::Enter => match self.submit_message().await {
-                            Ok(_) => {
-                                self.input_mode = InputMode::Normal;
-                                self.reset_cursor();
-                            }
-                            Err(e) => {
-                                eprintln!("Error submitting message: {}", e);
-                            }
-                        },
-                        KeyCode::Char(to_insert) => self.enter_char(to_insert),
-                        KeyCode::Backspace => self.delete_char(),
-                        KeyCode::Left => self.move_cursor_left(),
-                        KeyCode::Right => self.move_cursor_right(),
-                        KeyCode::Esc => self.input_mode = InputMode::Normal,
-                        _ => {}
-                    },
-                    InputMode::Editing => {}
-                }
-            }
-        }
-    }
-
     fn draw(&self, frame: &mut Frame) {
-        let vertical = Layout::vertical([
-            Constraint::Length(1),
-            Constraint::Length(3),
-            Constraint::Min(1),
-        ]);
-        let [help_area, input_area, messages_area] = vertical.areas(frame.area());
+        let main_menu_layout = Layout::new(
+            Direction::Vertical,
+            [
+                Constraint::Length(4),
+                Constraint::Min(0),
+            ],
+        )
+            .split(frame.area());
 
-        let (msg, style) = match self.input_mode {
-            InputMode::Normal => (
-                vec![
-                    "Press ".into(),
-                    "q".bold(),
-                    " to exit, ".into(),
-                    "e".bold(),
-                    " to start editing.".bold(),
-                ],
-                Style::default().add_modifier(Modifier::RAPID_BLINK),
-            ),
-            InputMode::Editing => (
-                vec![
-                    "Press ".into(),
-                    "Esc".bold(),
-                    " to stop editing, ".into(),
-                    "Enter".bold(),
-                    " to submit search query".into(),
-                ],
-                Style::default(),
-            ),
-        };
-        let text = Text::from(Line::from(msg)).patch_style(style);
-        let help_message = Paragraph::new(text);
-        frame.render_widget(help_message, help_area);
-
-        let input = Paragraph::new(self.input.as_str())
-            .style(match self.input_mode {
-                InputMode::Normal => Style::default(),
-                InputMode::Editing => Style::default().fg(Color::Yellow),
-            })
-            .block(Block::bordered().title("Input"));
-        frame.render_widget(input, input_area);
-        match self.input_mode {
-            // Hide the cursor. `Frame` does this by default, so we don't need to do anything here
-            InputMode::Normal => {}
-
-            // Make the cursor visible and ask ratatui to put it at the specified coordinates after
-            // rendering
-            #[allow(clippy::cast_possible_truncation)]
-            InputMode::Editing => frame.set_cursor_position(Position::new(
-                // Draw the cursor at the current position in the input field.
-                // This position is can be controlled via the left and right arrow key
-                input_area.x + self.character_index as u16 + 1,
-                // Move one line down, from the border to the input line
-                input_area.y + 1,
-            )),
-        }
-
-        let messages: Vec<ListItem> = self
-            .messages
+        let menu_items: Vec<ListItem> = vec![Feature::EnterZettel, Feature::SearchZettels]
             .iter()
             .enumerate()
-            .map(|(i, m)| {
-                let content = Line::from(Span::raw(format!("{i}: {m}")));
-                ListItem::new(content)
+            .map(|(i, feature)| {
+                let menu_entry = match feature {
+                    Feature::EnterZettel => "Enter Zettel",
+                    Feature::SearchZettels => "Search Zettels",
+                };
+                let mut menu_item = ListItem::new(menu_entry);
+                if Some(i) == self.selected_feature {
+                    menu_item = menu_item.style(Style::default().fg(Color::LightGreen).add_modifier(Modifier::BOLD));
+                }
+                menu_item
             })
             .collect();
-        let messages = List::new(messages).block(Block::bordered().title("Search Results"));
-        frame.render_widget(messages, messages_area);
+
+        let menu = List::new(menu_items);
+
+        // let enter_zettel_menu_item = Paragraph::new("Enter Zettel")
+        //     .style(Style::default().fg(Color::Blue))
+        //     .block(
+        //         Block::default()
+        //             .borders(Borders::ALL)
+        //             .border_type(BorderType::Rounded)
+        //     );
+
+        // let search_zettels_menu_item = Paragraph::new("Search Zettels")
+        //     .style(Style::default().fg(Color::Red))
+        //     .block(
+        //         Block::default()
+        //             .borders(Borders::ALL)
+        //             .border_type(BorderType::Rounded)
+        //     );
+
+        // let remix_zettels_menu_item = Paragraph::new("Remix Zettels")
+        //     .style(Style::default().fg(Color::Green))
+        //     .block(
+        //         Block::default()
+        //             .borders(Borders::ALL)
+        //             .border_type(BorderType::Rounded)
+        //     );
+
+        frame.render_widget(menu, main_menu_layout[0]);
+        // frame.render_widget(search_zettels_menu_item, main_menu_layout[1]);
+        // frame.render_widget(remix_zettels_menu_item, main_menu_layout[2]);
     }
 }
