@@ -27,8 +27,8 @@ async fn main() -> Result<(), Box<dyn Error>> {
     // add_combined_zettel(&mut llm_client).await?;
 
     color_eyre::install()?;
-    let terminal = ratatui::init();
-    let _app_result = App::new(llm_client).run(terminal).await?;
+    // let terminal = ratatui::init();
+    let _app_result = App::new(llm_client).run().await?;
     ratatui::restore();
 
     Ok(())
@@ -46,6 +46,7 @@ pub struct App {
     llm_client: LlmClient,
     features: Vec<Feature>,
     selected_feature: Option<usize>,
+    terminal: DefaultTerminal,
 }
 
 
@@ -54,19 +55,22 @@ impl App {
         let exit = false;
         let features = vec![Feature::EnterZettel, Feature::SearchZettels];
         let selected_feature = None;
+        let terminal = ratatui::init();
         Self {
             exit,
             llm_client,
             features,
-            selected_feature
+            selected_feature,
+            terminal,
         }
     }
 
-    async fn run(mut self, mut terminal: DefaultTerminal) -> Result<(), Box<dyn Error>> {
+    async fn run(mut self) -> Result<(), Box<dyn Error>> {
         // The application's main loop
         loop {
             // draw frame
-            terminal.draw(|f| self.draw(f))?;
+            let selected_feature = self.selected_feature;
+            self.terminal.draw(|f| draw_ui(f, selected_feature))?;
 
             // handle events
             if let Event::Key(key) = event::read()? {
@@ -101,8 +105,10 @@ impl App {
                             match feature {
                                 Feature::EnterZettel => {
                                     add_zettel(&mut self.llm_client, &vec![]).await?;
-                                    terminal.draw(|f| self.draw(f))?; // redraw ui after vim buffer
-                                                                      // exits
+                                    let selected_feature = self.selected_feature;
+                                    self.terminal.draw(|f| draw_ui(f, selected_feature))?;
+                                    ratatui::restore();
+                                    self.terminal = ratatui::init();
                                 },
                                 _ => {},
                             };
@@ -118,61 +124,36 @@ impl App {
         }
         Ok(())
     }
-
-    fn draw(&self, frame: &mut Frame) {
-        let main_menu_layout = Layout::new(
-            Direction::Vertical,
-            [
-                Constraint::Length(4),
-                Constraint::Min(0),
-            ],
-        )
-            .split(frame.area());
-
-        let menu_items: Vec<ListItem> = vec![Feature::EnterZettel, Feature::SearchZettels]
-            .iter()
-            .enumerate()
-            .map(|(i, feature)| {
-                let menu_entry = match feature {
-                    Feature::EnterZettel => "Enter Zettel",
-                    Feature::SearchZettels => "Search Zettels",
-                };
-                let mut menu_item = ListItem::new(menu_entry);
-                if Some(i) == self.selected_feature {
-                    menu_item = menu_item.style(Style::default().fg(Color::LightGreen).add_modifier(Modifier::BOLD));
-                }
-                menu_item
-            })
-            .collect();
-
-        let menu = List::new(menu_items);
-
-        // let enter_zettel_menu_item = Paragraph::new("Enter Zettel")
-        //     .style(Style::default().fg(Color::Blue))
-        //     .block(
-        //         Block::default()
-        //             .borders(Borders::ALL)
-        //             .border_type(BorderType::Rounded)
-        //     );
-
-        // let search_zettels_menu_item = Paragraph::new("Search Zettels")
-        //     .style(Style::default().fg(Color::Red))
-        //     .block(
-        //         Block::default()
-        //             .borders(Borders::ALL)
-        //             .border_type(BorderType::Rounded)
-        //     );
-
-        // let remix_zettels_menu_item = Paragraph::new("Remix Zettels")
-        //     .style(Style::default().fg(Color::Green))
-        //     .block(
-        //         Block::default()
-        //             .borders(Borders::ALL)
-        //             .border_type(BorderType::Rounded)
-        //     );
-
-        frame.render_widget(menu, main_menu_layout[0]);
-        // frame.render_widget(search_zettels_menu_item, main_menu_layout[1]);
-        // frame.render_widget(remix_zettels_menu_item, main_menu_layout[2]);
-    }
 }
+
+pub fn draw_ui(frame: &mut Frame, selected_feature: Option<usize>) {
+    let main_menu_layout = Layout::new(
+        Direction::Vertical,
+        [
+            Constraint::Length(4),
+            Constraint::Min(0),
+        ],
+    )
+        .split(frame.area());
+
+    let menu_items: Vec<ListItem> = vec![Feature::EnterZettel, Feature::SearchZettels]
+        .iter()
+        .enumerate()
+        .map(|(i, feature)| {
+            let menu_entry = match feature {
+                Feature::EnterZettel => "Enter Zettel",
+                Feature::SearchZettels => "Search Zettels",
+            };
+            let mut menu_item = ListItem::new(menu_entry);
+            if Some(i) == selected_feature {
+                menu_item = menu_item.style(Style::default().fg(Color::LightGreen).add_modifier(Modifier::BOLD));
+            }
+            menu_item
+        })
+        .collect();
+
+    let menu = List::new(menu_items);
+
+    frame.render_widget(menu, main_menu_layout[0]);
+}
+
