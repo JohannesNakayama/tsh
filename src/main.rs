@@ -1,5 +1,5 @@
 use ratatui::{
-    crossterm::event::{self, Event, KeyCode}, layout::{Constraint, Direction, Layout}, style::{Color, Modifier, Style}, widgets::{List, ListItem}, DefaultTerminal, Frame
+    crossterm::event::{self, Event, KeyCode}, layout::{Constraint, Direction, Layout}, style::{Color, Modifier, Style}, widgets::{Block, BorderType, Borders, List, ListItem, Paragraph}, DefaultTerminal, Frame
 };
 use tsh::{add_zettel, llm::LlmClient};
 use std::error::Error;
@@ -27,9 +27,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
     // add_combined_zettel(&mut llm_client).await?;
 
     color_eyre::install()?;
-    // let terminal = ratatui::init();
     let _app_result = App::new(llm_client).run().await?;
-    ratatui::restore();
 
     Ok(())
 }
@@ -57,11 +55,11 @@ impl App {
         let selected_feature = None;
         let terminal = ratatui::init();
         Self {
-            exit,
-            llm_client,
-            features,
-            selected_feature,
-            terminal,
+            exit: exit,
+            llm_client: llm_client,
+            features: features,
+            selected_feature: selected_feature,
+            terminal: terminal,
         }
     }
 
@@ -110,7 +108,10 @@ impl App {
                                     ratatui::restore();
                                     self.terminal = ratatui::init();
                                 },
-                                _ => {},
+                                Feature::SearchZettels => {
+                                    let mut selection = SearchFeature::default();
+                                    selection.run()?;
+                                },
                             };
                         }
                     }
@@ -119,6 +120,7 @@ impl App {
             }
 
             if self.exit {
+                ratatui::restore();
                 break;
             }
         }
@@ -157,3 +159,43 @@ pub fn draw_main_menu(frame: &mut Frame, selected_feature: Option<usize>) {
     frame.render_widget(menu, main_menu_layout[0]);
 }
 
+
+pub struct SearchFeature {
+    input: String,
+    terminal: DefaultTerminal,
+}
+
+impl SearchFeature {
+    fn default() -> Self {
+        let terminal = ratatui::init();
+        SearchFeature { input: String::new(), terminal: terminal }
+    }
+
+    fn run(&mut self) -> Result<(), Box<dyn Error>> {
+        self.terminal.draw(|f| draw_search_page(f, self.input.clone()))?;
+        Ok(())
+    }
+}
+
+
+pub fn draw_search_page(frame: &mut Frame, search_input: String) {
+    let search_layout = Layout::new(
+        Direction::Vertical,
+        [
+            Constraint::Length(3),
+            Constraint::Min(0),
+        ],
+    )
+        .split(frame.area());
+
+    let search_input = Paragraph::new(search_input)
+        .style(Style::default().fg(Color::White))
+        .block(
+            Block::default()
+                .borders(Borders::ALL)
+                .border_type(BorderType::Rounded)
+                .title("Input")
+        );
+
+    frame.render_widget(search_input, search_layout[0]);
+}
