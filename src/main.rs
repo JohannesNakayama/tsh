@@ -109,8 +109,10 @@ impl App {
                                     self.terminal = ratatui::init();
                                 },
                                 Feature::SearchZettels => {
-                                    let mut selection = SearchFeature::default();
-                                    selection.run()?;
+                                    let mut search_feature = SearchFeature::default();
+                                    search_feature.run()?;
+                                    ratatui::restore();
+                                    self.terminal = ratatui::init();
                                 },
                             };
                         }
@@ -160,25 +162,65 @@ pub fn draw_main_menu(frame: &mut Frame, selected_feature: Option<usize>) {
 }
 
 
+pub enum InputMode {
+    Insert,
+    Normal,
+}
+
+
 pub struct SearchFeature {
     input: String,
+    input_mode: InputMode,
     terminal: DefaultTerminal,
 }
 
 impl SearchFeature {
     fn default() -> Self {
         let terminal = ratatui::init();
-        SearchFeature { input: String::new(), terminal: terminal }
+        SearchFeature {
+            input: String::new(),
+            input_mode: InputMode::Normal,
+            terminal: terminal
+        }
     }
 
     fn run(&mut self) -> Result<(), Box<dyn Error>> {
-        self.terminal.draw(|f| draw_search_page(f, self.input.clone()))?;
+        loop {
+            self.terminal.draw(|f| draw_search_page(f, &self.input))?;
+
+            if let Event::Key(key) = event::read()? {
+                match self.input_mode {
+                    InputMode::Normal => match key.code {
+                        KeyCode::Char('i') => {
+                            self.input_mode = InputMode::Insert;
+                        },
+                        KeyCode::Esc => {
+                            break;
+                        },
+                        _ => {},
+                    },
+                    InputMode::Insert => match key.code {
+                        KeyCode::Esc => {
+                            self.input_mode = InputMode::Normal;
+                        },
+                        KeyCode::Char(c) => {
+                            self.input.push(c);
+                        },
+                        KeyCode::Backspace => {
+                            self.input.pop();
+                        }
+                        _ => {},
+                    },
+                }
+            }
+        }
+
         Ok(())
     }
 }
 
 
-pub fn draw_search_page(frame: &mut Frame, search_input: String) {
+pub fn draw_search_page(frame: &mut Frame, search_input: &str) {
     let search_layout = Layout::new(
         Direction::Vertical,
         [
