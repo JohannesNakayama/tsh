@@ -60,9 +60,9 @@ pub async fn run(app: &mut App) -> Result<(), Box<dyn Error>> {
                     terminal = ratatui::init();
                 }
                 Feature::SearchZettels => {
-                    let mut search_model = SearchFeature::default();
+                    let mut search_model = SearchFeature::new(app.llm_client.clone());
                     app.activated_feature = None;
-                    tui::search::run(&mut search_model)?;
+                    tui::search::run(&mut search_model).await?;
                     ratatui::restore();
                     terminal = ratatui::init();
                 }
