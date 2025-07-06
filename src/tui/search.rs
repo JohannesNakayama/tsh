@@ -134,7 +134,7 @@ fn handle_key(key: KeyEvent, input_mode: &InputMode) -> Option<Message> {
     match input_mode {
         InputMode::Normal => match key.code {
             KeyCode::Char('i') => Some(Message::EnterInsertMode),
-            KeyCode::Esc => Some(Message::ExitSearchFeature),
+            KeyCode::Char('q') | KeyCode::Esc => Some(Message::ExitSearchFeature),
             KeyCode::Enter => Some(Message::SubmitQuery),
             _ => None,
         },
