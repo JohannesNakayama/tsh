@@ -8,14 +8,13 @@ use ratatui::{
 use std::error::Error;
 
 use crate::{
-    add_zettel,
-    llm::LlmClient,
-    tui::{self, search::SearchFeature},
+    api::add_zettel, llm::LlmClient, tui::{self, develop::DevelopFeature, search::SearchFeature}
 };
 
 enum Feature {
     EnterZettel,
     SearchZettels,
+    DevelopZettel,
 }
 
 pub struct App {
@@ -29,7 +28,7 @@ pub struct App {
 impl App {
     pub fn new(llm_client: LlmClient) -> Self {
         let exit = false;
-        let features = vec![Feature::EnterZettel, Feature::SearchZettels];
+        let features = vec![Feature::EnterZettel, Feature::SearchZettels, Feature::DevelopZettel];
         let selected_feature = Some(0);
         Self {
             exit: exit,
@@ -52,21 +51,22 @@ pub async fn run(app: &mut App) -> Result<(), Box<dyn Error>> {
         }
 
         if let Some(feature) = &app.activated_feature {
+            ratatui::restore();
             match feature {
                 Feature::EnterZettel => {
                     add_zettel(&mut app.llm_client, &vec![]).await?;
-                    app.activated_feature = None;
-                    ratatui::restore();
-                    terminal = ratatui::init();
-                }
+                },
                 Feature::SearchZettels => {
                     let mut search_model = SearchFeature::new(app.llm_client.clone());
-                    app.activated_feature = None;
                     tui::search::run(&mut search_model).await?;
-                    ratatui::restore();
-                    terminal = ratatui::init();
-                }
-            }
+                },
+                Feature::DevelopZettel => {
+                    let mut develop_model = DevelopFeature::new();
+                    tui::develop::run(&mut develop_model)?;
+                },
+            };
+            app.activated_feature = None;
+            terminal = ratatui::init();
         }
 
         if app.exit {
@@ -143,6 +143,7 @@ fn handle_key(key: KeyEvent, selected_feature: &Option<usize>) -> Option<Message
                     // TODO: refactor this
                     0 => Feature::EnterZettel,
                     1 => Feature::SearchZettels,
+                    2 => Feature::DevelopZettel,
                     _ => return None,
                 };
                 Some(Message::EnterFeature(feature))
@@ -158,13 +159,15 @@ fn view(frame: &mut Frame, selected_feature: Option<usize>) {
     let main_menu_layout =
         Layout::new(Direction::Vertical, [Constraint::Length(4)]).split(frame.area());
 
-    let menu_items: Vec<ListItem> = vec![Feature::EnterZettel, Feature::SearchZettels]
+    // TODO: refactor
+    let menu_items: Vec<ListItem> = vec![Feature::EnterZettel, Feature::SearchZettels, Feature::DevelopZettel]
         .iter()
         .enumerate()
         .map(|(i, feature)| {
             let menu_entry = match feature {
                 Feature::EnterZettel => "Enter Zettel",
                 Feature::SearchZettels => "Search Zettels",
+                Feature::DevelopZettel => "Develop Zettel",
             };
             let mut menu_item = ListItem::new(menu_entry);
             if Some(i) == selected_feature {

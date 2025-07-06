@@ -12,6 +12,17 @@
 
 ## Next Steps
 
+
+develop a zettel:
+    - entrypoint:
+        - find by embedding (search bar with result list for selection)
+        - most recent (result list for selection)
+        - (select date range)
+    - select zettel -> open and edit in neovim
+    - store new zettel with old zettel id as parent id
+
+
+
 - search
     - navigate through search results
     - select multiple results and store them as app state

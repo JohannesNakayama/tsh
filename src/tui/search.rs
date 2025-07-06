@@ -41,6 +41,8 @@ pub async fn run(model: &mut SearchFeature) -> Result<(), Box<dyn Error>> {
         }
     }
 
+    ratatui::restore();
+
     Ok(())
 }
 
