@@ -1,6 +1,6 @@
 use ratatui::{
-    DefaultTerminal, Frame,
-    crossterm::event::{self, Event, KeyCode},
+    Frame,
+    crossterm::event::{self, Event, KeyCode, KeyEvent},
     layout::{Constraint, Direction, Layout},
     style::{Color, Modifier, Style},
     widgets::{List, ListItem},
@@ -13,102 +13,144 @@ use crate::{
     tui::{self, search::SearchFeature},
 };
 
-pub enum Feature {
+enum Feature {
     EnterZettel,
     SearchZettels,
 }
 
-pub struct MainMenu {
+pub struct App {
     exit: bool,
     llm_client: LlmClient,
     features: Vec<Feature>,
     selected_feature: Option<usize>,
-    terminal: DefaultTerminal,
+    activated_feature: Option<Feature>,
 }
 
-impl MainMenu {
+impl App {
     pub fn new(llm_client: LlmClient) -> Self {
         let exit = false;
         let features = vec![Feature::EnterZettel, Feature::SearchZettels];
         let selected_feature = Some(0);
-        let terminal = ratatui::init();
         Self {
             exit: exit,
             llm_client: llm_client,
             features: features,
             selected_feature: selected_feature,
-            terminal: terminal,
+            activated_feature: None,
+        }
+    }
+}
+
+pub async fn run(app: &mut App) -> Result<(), Box<dyn Error>> {
+    let mut terminal = ratatui::init();
+
+    loop {
+        terminal.draw(|f| view(f, app.selected_feature))?;
+
+        if let Some(msg) = handle_event(app)? {
+            update(app, msg).await;
+        }
+
+        if let Some(feature) = &app.activated_feature {
+            match feature {
+                Feature::EnterZettel => {
+                    add_zettel(&mut app.llm_client, &vec![]).await?;
+                    app.activated_feature = None;
+                    ratatui::restore();
+                    terminal = ratatui::init();
+                }
+                Feature::SearchZettels => {
+                    let mut search_model = SearchFeature::default();
+                    app.activated_feature = None;
+                    tui::search::run(&mut search_model)?;
+                    ratatui::restore();
+                    terminal = ratatui::init();
+                }
+            }
+        }
+
+        if app.exit {
+            ratatui::restore();
+            break;
         }
     }
 
-    pub async fn run(mut self) -> Result<(), Box<dyn Error>> {
-        // The application's main loop
-        loop {
-            // draw frame
-            let selected_feature = self.selected_feature;
-            self.terminal.draw(|f| view(f, selected_feature))?;
+    Ok(())
+}
 
-            // handle events
-            if let Event::Key(key) = event::read()? {
-                match key.code {
-                    KeyCode::Char('q') => {
-                        self.exit = true;
+enum Message {
+    QuitApp,
+    MoveDown,
+    MoveUp,
+    EnterFeature(Feature),
+}
+
+async fn update(model: &mut App, msg: Message) {
+    match msg {
+        Message::QuitApp => {
+            model.exit = true;
+        }
+        Message::MoveDown => {
+            model.selected_feature = match model.selected_feature {
+                Some(feature_idx) => {
+                    if feature_idx == (model.features.len() - 1) {
+                        Some(feature_idx)
+                    } else {
+                        Some(feature_idx + 1)
                     }
-                    KeyCode::Down => {
-                        self.selected_feature = match self.selected_feature {
-                            Some(feature_idx) => {
-                                if feature_idx == (self.features.len() - 1) {
-                                    Some(feature_idx)
-                                } else {
-                                    Some(feature_idx + 1)
-                                }
-                            }
-                            None => Some(0),
-                        };
-                    }
-                    KeyCode::Up => {
-                        self.selected_feature = match self.selected_feature {
-                            Some(feature_idx) => {
-                                if feature_idx == 0 {
-                                    Some(feature_idx)
-                                } else {
-                                    Some(feature_idx - 1)
-                                }
-                            }
-                            None => Some(self.features.len() - 1),
-                        };
-                    }
-                    // Execute feature
-                    KeyCode::Enter => {
-                        if let Some(selected_feature) = self.selected_feature {
-                            let feature = &self.features[selected_feature];
-                            match feature {
-                                Feature::EnterZettel => {
-                                    add_zettel(&mut self.llm_client, &vec![]).await?;
-                                    let selected_feature = self.selected_feature;
-                                    self.terminal.draw(|f| view(f, selected_feature))?;
-                                    ratatui::restore();
-                                    self.terminal = ratatui::init();
-                                }
-                                Feature::SearchZettels => {
-                                    let mut search_model = SearchFeature::default();
-                                    tui::search::run(&mut search_model)?;
-                                    ratatui::restore();
-                                    self.terminal = ratatui::init();
-                                }
-                            };
-                        }
-                    }
-                    _ => {}
                 }
-            }
+                None => Some(0),
+            };
+        }
+        Message::MoveUp => {
+            model.selected_feature = match model.selected_feature {
+                Some(feature_idx) => {
+                    if feature_idx == 0 {
+                        Some(feature_idx)
+                    } else {
+                        Some(feature_idx - 1)
+                    }
+                }
+                None => Some(model.features.len() - 1),
+            };
+        }
+        Message::EnterFeature(feature) => {
+            model.activated_feature = Some(feature);
+        }
+    }
+}
 
-            if self.exit {
-                ratatui::restore();
-                break;
+fn handle_event(model: &mut App) -> color_eyre::Result<Option<Message>> {
+    if event::poll(std::time::Duration::from_millis(50))? {
+        if let Event::Key(key) = event::read()? {
+            if key.kind == event::KeyEventKind::Press {
+                return Ok(handle_key(key, &model.selected_feature));
             }
         }
-        Ok(())
+    }
+
+    Ok(None)
+}
+
+fn handle_key(key: KeyEvent, selected_feature: &Option<usize>) -> Option<Message> {
+    match key.code {
+        KeyCode::Char('q') => Some(Message::QuitApp),
+        KeyCode::Down => Some(Message::MoveDown),
+        KeyCode::Up => Some(Message::MoveUp),
+        KeyCode::Enter => {
+            if let Some(feature_idx) = selected_feature {
+                let feature = match feature_idx {
+                    // TODO: refactor this
+                    0 => Feature::EnterZettel,
+                    1 => Feature::SearchZettels,
+                    _ => return None,
+                };
+                Some(Message::EnterFeature(feature))
+            } else {
+                None
+            }
+        }
+        _ => None,
     }
 }
 
