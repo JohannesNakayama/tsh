@@ -1,13 +1,13 @@
 use ratatui::{
-    DefaultTerminal, Frame,
-    crossterm::event::{self, Event, KeyCode},
+    Frame,
+    crossterm::event::{self, Event, KeyCode, KeyEvent},
     layout::{Constraint, Direction, Layout},
     style::{Color, Style},
     widgets::{Block, BorderType, Borders, Paragraph},
 };
-use std::error::Error;
+use std::{error::Error, time::Duration};
 
-pub enum InputMode {
+enum InputMode {
     Insert,
     Normal,
 }
@@ -15,62 +15,101 @@ pub enum InputMode {
 pub struct SearchFeature {
     input: String,
     input_mode: InputMode,
-    terminal: DefaultTerminal,
+    exit: bool,
 }
 
 impl SearchFeature {
     pub fn default() -> Self {
-        let terminal = ratatui::init();
         SearchFeature {
             input: String::new(),
             input_mode: InputMode::Normal,
-            terminal: terminal,
+            exit: false,
         }
-    }
-
-    pub fn run(&mut self) -> Result<(), Box<dyn Error>> {
-        loop {
-            self.terminal.draw(|f| draw_search_page(f, &self.input))?;
-
-            if let Event::Key(key) = event::read()? {
-                match self.input_mode {
-                    InputMode::Normal => match key.code {
-                        KeyCode::Char('i') => {
-                            self.input_mode = InputMode::Insert;
-                        }
-                        KeyCode::Esc => {
-                            break;
-                        }
-                        _ => {}
-                    },
-                    InputMode::Insert => match key.code {
-                        KeyCode::Esc => {
-                            self.input_mode = InputMode::Normal;
-                        }
-                        KeyCode::Char(c) => {
-                            self.input.push(c);
-                        }
-                        KeyCode::Backspace => {
-                            self.input.pop();
-                        }
-                        _ => {}
-                    },
-                }
-            }
-        }
-
-        Ok(())
     }
 }
 
-pub fn draw_search_page(frame: &mut Frame, search_input: &str) {
+pub fn run(model: &mut SearchFeature) -> Result<(), Box<dyn Error>> {
+    let mut terminal = ratatui::init();
+
+    loop {
+        terminal.draw(|f| view(f, &model))?;
+
+        if let Some(message) = handle_event(model)? {
+            update(model, message);
+        }
+
+        if model.exit {
+            break;
+        }
+    }
+
+    Ok(())
+}
+
+enum Message {
+    ExitSearchFeature,
+    EnterInsertMode,
+    ExitInsertMode,
+    InsertCharacter(char),
+    DeleteCharacter,
+}
+
+fn update(model: &mut SearchFeature, msg: Message) {
+    match msg {
+        Message::ExitSearchFeature => {
+            model.exit = true;
+        }
+        Message::EnterInsertMode => {
+            model.input_mode = InputMode::Insert;
+        }
+        Message::ExitInsertMode => {
+            model.input_mode = InputMode::Normal;
+        }
+        Message::InsertCharacter(c) => {
+            model.input.push(c);
+        }
+        Message::DeleteCharacter => {
+            model.input.pop();
+        }
+    };
+}
+
+fn handle_event(model: &mut SearchFeature) -> color_eyre::Result<Option<Message>> {
+    if event::poll(Duration::from_millis(50))? {
+        if let Event::Key(key) = event::read()? {
+            if key.kind == event::KeyEventKind::Press {
+                return Ok(handle_key(key, &model.input_mode));
+            }
+        }
+    }
+
+    Ok(None)
+}
+
+fn handle_key(key: KeyEvent, input_mode: &InputMode) -> Option<Message> {
+    match input_mode {
+        InputMode::Normal => match key.code {
+            KeyCode::Char('i') => Some(Message::EnterInsertMode),
+            KeyCode::Esc => Some(Message::ExitSearchFeature),
+            _ => None,
+        },
+        InputMode::Insert => match key.code {
+            KeyCode::Esc => Some(Message::ExitInsertMode),
+            KeyCode::Char(c) => Some(Message::InsertCharacter(c)),
+            KeyCode::Backspace => Some(Message::DeleteCharacter),
+            _ => None,
+        },
+    }
+}
+
+fn view(frame: &mut Frame, model: &SearchFeature) {
     let search_layout = Layout::new(
         Direction::Vertical,
         [Constraint::Length(3), Constraint::Min(0)],
     )
     .split(frame.area());
 
-    let search_input = Paragraph::new(search_input)
+    let search_input = Paragraph::new(model.input.as_str())
         .style(Style::default().fg(Color::White))
         .block(
             Block::default()

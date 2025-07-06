@@ -7,7 +7,11 @@ use ratatui::{
 };
 use std::error::Error;
 
-use crate::{add_zettel, llm::LlmClient, tui::search::SearchFeature};
+use crate::{
+    add_zettel,
+    llm::LlmClient,
+    tui::{self, search::SearchFeature},
+};
 
 pub enum Feature {
     EnterZettel,
@@ -87,8 +91,8 @@ impl MainMenu {
                                     self.terminal = ratatui::init();
                                 }
                                 Feature::SearchZettels => {
-                                    let mut search_feature = SearchFeature::default();
-                                    search_feature.run()?;
+                                    let mut search_model = SearchFeature::default();
+                                    tui::search::run(&mut search_model)?;
                                     ratatui::restore();
                                     self.terminal = ratatui::init();
                                 }
