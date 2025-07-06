@@ -12,8 +12,6 @@
 
 ## Next Steps
 
-- don't store empty zettels
-
 - search
     - navigate through search results
     - select multiple results and store them as app state

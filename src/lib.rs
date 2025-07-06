@@ -77,10 +77,9 @@ pub async fn add_zettel(
 ) -> Result<(), Box<dyn Error>> {
     match open_and_edit_neovim_buffer(Some(combine_zettel_contents(parents.to_vec()).as_str())) {
         Ok(edited_content) => {
-            // println!("\nNeovim closed. Edited content retrieved:");
-            // println!("```");
-            // println!("{}", edited_content);
-            // println!("```");
+            if edited_content.is_empty() {
+                return Ok(());
+            }
 
             if let Ok(embedding) = llm_client.embed(&edited_content).await {
                 let parent_ids = parents.iter().map(|zettel| zettel.id).collect();
