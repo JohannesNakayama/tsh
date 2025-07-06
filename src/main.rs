@@ -1,5 +1,8 @@
 use std::error::Error;
-use tsh::{llm::LlmClient, tui::app::{self, App}};
+use tsh::{
+    llm::LlmClient,
+    tui::app::{self, App},
+};
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn Error>> {

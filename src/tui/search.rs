@@ -7,11 +7,6 @@ use ratatui::{
 };
 use std::{error::Error, time::Duration};
 
-enum InputMode {
-    Insert,
-    Normal,
-}
-
 pub struct SearchFeature {
     input: String,
     input_mode: InputMode,
@@ -46,12 +41,36 @@ pub fn run(model: &mut SearchFeature) -> Result<(), Box<dyn Error>> {
     Ok(())
 }
 
+enum InputMode {
+    Insert,
+    Normal,
+}
+
 enum Message {
     ExitSearchFeature,
     EnterInsertMode,
     ExitInsertMode,
     InsertCharacter(char),
     DeleteCharacter,
+}
+
+fn view(frame: &mut Frame, model: &SearchFeature) {
+    let search_layout = Layout::new(
+        Direction::Vertical,
+        [Constraint::Length(3), Constraint::Min(0)],
+    )
+    .split(frame.area());
+
+    let search_input = Paragraph::new(model.input.as_str())
+        .style(Style::default().fg(Color::White))
+        .block(
+            Block::default()
+                .borders(Borders::ALL)
+                .border_type(BorderType::Rounded)
+                .title("Input"),
+        );
+
+    frame.render_widget(search_input, search_layout[0]);
 }
 
 fn update(model: &mut SearchFeature, msg: Message) {
@@ -100,23 +119,4 @@ fn handle_key(key: KeyEvent, input_mode: &InputMode) -> Option<Message> {
             _ => None,
         },
     }
-}
-
-fn view(frame: &mut Frame, model: &SearchFeature) {
-    let search_layout = Layout::new(
-        Direction::Vertical,
-        [Constraint::Length(3), Constraint::Min(0)],
-    )
-    .split(frame.area());
-
-    let search_input = Paragraph::new(model.input.as_str())
-        .style(Style::default().fg(Color::White))
-        .block(
-            Block::default()
-                .borders(Borders::ALL)
-                .border_type(BorderType::Rounded)
-                .title("Input"),
-        );
-
-    frame.render_widget(search_input, search_layout[0]);
 }
