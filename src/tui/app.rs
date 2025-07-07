@@ -14,8 +14,12 @@ pub enum AppCommand {
     Quit,
 }
 
+#[trait_variant::make(ScreenMulti: Send)]
 pub trait Screen {
-    fn handle_key_event(&mut self, key: KeyEvent) -> Option<AppCommand>;
+    async fn handle_key_event(
+        &mut self,
+        key: KeyEvent,
+    ) -> Result<Option<AppCommand>, Box<dyn Error>>;
     fn draw(&mut self, frame: &mut Frame);
 }
 
@@ -26,23 +30,25 @@ pub struct App {
 }
 
 impl App {
-    pub fn new(_llm_client: LlmClient) -> Self {
+    pub fn new(llm_client: LlmClient) -> Self {
+        // TODO: refactor (use reference of llm client instead)
+        // TODO: understand lifetimes properly...
         Self {
             should_quit: false,
-            // llm_client: llm_client,
-            current_screen: ActiveScreenType::Main(MainMenuScreen::new()),
+            // llm_client: llm_client.clone(),
+            current_screen: ActiveScreenType::Main(MainMenuScreen::new(llm_client.clone())),
         }
     }
 
-    fn handle_event(&mut self) -> color_eyre::Result<Option<AppCommand>> {
+    async fn handle_event(&mut self) -> Result<Option<AppCommand>, Box<dyn Error>> {
         if event::poll(std::time::Duration::from_millis(50))? {
             if let Event::Key(key) = event::read()? {
                 if key.kind == event::KeyEventKind::Press {
                     match &mut self.current_screen {
                         ActiveScreenType::Main(screen) => {
-                            return Ok(screen.handle_key_event(key));
-                        }
-                        // TODO: add handling for other screens
+                            let maybe_action = screen.handle_key_event(key).await?;
+                            return Ok(maybe_action);
+                        } // TODO: add handling for other screens
                     }
                 }
             }
@@ -71,7 +77,7 @@ impl App {
         let mut terminal = ratatui::init();
 
         loop {
-            if let Some(command) = self.handle_event()? {
+            if let Some(command) = self.handle_event().await? {
                 self.process_app_command(command);
             }
 

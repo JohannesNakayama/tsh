@@ -1,3 +1,5 @@
+use std::error::Error;
+
 use ratatui::{
     Frame,
     crossterm::event::{KeyCode, KeyEvent},
@@ -5,38 +7,54 @@ use ratatui::{
     style::{Color, Modifier, Style},
     widgets::{List, ListItem},
 };
+use strum::{Display, EnumIter, FromRepr, IntoEnumIterator};
 
-use crate::tui::app::{AppCommand, Screen};
+use crate::{
+    api::add_zettel,
+    llm::LlmClient,
+    tui::app::{AppCommand, Screen},
+};
 
 pub struct MainMenuScreen {
-    features: Vec<Feature>,
-    selected_feature: Option<usize>,
-    // activated_feature: Option<Feature>,
+    llm_client: LlmClient,
+    selected_action: Action,
 }
 
-enum Feature {
-    EnterZettel,
-    SearchZettels,
-    DevelopZettel,
+#[derive(Default, Clone, Copy, Display, FromRepr, EnumIter, PartialEq, Eq)]
+enum Action {
+    #[default]
+    #[strum(to_string = "Add")]
+    AddZettel,
+    #[strum(to_string = "Iterate")]
+    IterateZettel,
 }
 
-pub enum MainMenuMessage {
+impl Action {
+    pub fn previous(self) -> Self {
+        let current_idx: usize = self as usize;
+        let previous_idx = current_idx.saturating_sub(1);
+        Self::from_repr(previous_idx).unwrap_or(self)
+    }
+
+    pub fn next(self) -> Self {
+        let current_idx: usize = self as usize;
+        let next_idx = current_idx.saturating_add(1);
+        Self::from_repr(next_idx).unwrap_or(self)
+    }
+}
+
+enum MainMenuMessage {
     QuitApp,
     MoveDown,
     MoveUp,
-    // EnterFeature(Feature),
+    DoAction(Action),
 }
 
 impl MainMenuScreen {
-    pub fn new() -> Self {
+    pub fn new(llm_client: LlmClient) -> Self {
         Self {
-            features: vec![
-                Feature::EnterZettel,
-                Feature::SearchZettels,
-                Feature::DevelopZettel,
-            ],
-            selected_feature: Some(0),
-            // activated_feature: None,
+            llm_client,
+            selected_action: Action::AddZettel,
         }
     }
 
@@ -45,109 +63,71 @@ impl MainMenuScreen {
             KeyCode::Down => Some(MainMenuMessage::MoveDown),
             KeyCode::Up => Some(MainMenuMessage::MoveUp),
             KeyCode::Char('q') => Some(MainMenuMessage::QuitApp),
+            KeyCode::Enter => Some(MainMenuMessage::DoAction(self.selected_action)),
             _ => None,
         }
     }
 
-    fn update(&mut self, msg: MainMenuMessage) {
+    async fn update(&mut self, msg: MainMenuMessage) -> Result<(), Box<dyn Error>> {
         match msg {
             MainMenuMessage::MoveDown => {
-                self.selected_feature = match self.selected_feature {
-                    Some(feature_idx) => {
-                        if feature_idx == (self.features.len() - 1) {
-                            Some(feature_idx)
-                        } else {
-                            Some(feature_idx + 1)
-                        }
-                    }
-                    None => Some(0),
-                };
+                self.selected_action = self.selected_action.next();
             }
             MainMenuMessage::MoveUp => {
-                self.selected_feature = match self.selected_feature {
-                    Some(feature_idx) => {
-                        if feature_idx == 0 {
-                            Some(feature_idx)
-                        } else {
-                            Some(feature_idx - 1)
-                        }
-                    }
-                    None => Some(self.features.len() - 1),
-                };
+                self.selected_action = self.selected_action.previous();
             }
-            // MainMenuMessage::EnterFeature(feature) => {
-            //     model.activated_feature = Some(feature);
-            // }
+            MainMenuMessage::DoAction(action) => {
+                match action {
+                    Action::AddZettel => {
+                        // Open an empty Zettel in neovim buffer, no need for new screen
+                        add_zettel(&mut self.llm_client, &vec![]).await?;
+                    }
+                    Action::IterateZettel => {
+                        // TODO
+                    }
+                }
+            }
             _ => {}
-        }
-
-        // TODO:
-        // FOR REFERENCE
-        // if let Some(feature) = &app.activated_feature {
-        //     ratatui::restore();
-        //     match feature {
-        //         Feature::EnterZettel => {
-        //             // Open an empty Zettel in neovim buffer, no need for new screen
-        //             add_zettel(&mut app.llm_client, &vec![]).await?;
-        //         },
-        //         Feature::SearchZettels => {
-        //             let mut search_model = SearchFeature::new(app.llm_client.clone());
-        //             tui::search::run(&mut search_model).await?;
-        //         },
-        //         Feature::DevelopZettel => {
-        //             let mut develop_model = DevelopFeature::new();
-        //             tui::develop::run(&mut develop_model)?;
-        //         },
-        //     };
-        //     app.activated_feature = None;
-        //     terminal = ratatui::init();
-        // }
+        };
+        Ok(())
     }
 }
 
 impl Screen for MainMenuScreen {
-    fn handle_key_event(&mut self, key: KeyEvent) -> Option<AppCommand> {
+    async fn handle_key_event(
+        &mut self,
+        key: KeyEvent,
+    ) -> Result<Option<AppCommand>, Box<dyn Error>> {
         if let Some(msg) = self.handle_key_event_internal(key) {
             match msg {
-                MainMenuMessage::QuitApp => Some(AppCommand::Quit),
+                MainMenuMessage::QuitApp => Ok(Some(AppCommand::Quit)),
                 _ => {
-                    self.update(msg);
-                    None
+                    self.update(msg).await?;
+                    Ok(None)
                 }
             }
         } else {
-            None
+            Ok(None)
         }
     }
 
     fn draw(&mut self, f: &mut Frame) {
         let layout = Layout::new(Direction::Vertical, [Constraint::Length(4)]).split(f.area());
 
-        // TODO: refactor
-        let menu_items: Vec<ListItem> = vec![
-            Feature::EnterZettel,
-            Feature::SearchZettels,
-            Feature::DevelopZettel,
-        ]
-        .iter()
-        .enumerate()
-        .map(|(i, feature)| {
-            let menu_entry = match feature {
-                Feature::EnterZettel => "Enter Zettel",
-                Feature::SearchZettels => "Search Zettels",
-                Feature::DevelopZettel => "Develop Zettel",
-            };
-            let mut menu_item = ListItem::new(menu_entry);
-            if Some(i) == self.selected_feature {
-                menu_item = menu_item.style(
-                    Style::default()
-                        .fg(Color::LightGreen)
-                        .add_modifier(Modifier::BOLD),
-                );
-            }
-            menu_item
-        })
-        .collect();
+        let menu_items: Vec<ListItem> = Action::iter()
+            .map(|action| {
+                let menu_entry = format!("{action}");
+                let mut menu_item = ListItem::new(menu_entry);
+                if action == self.selected_action {
+                    menu_item = menu_item.style(
+                        Style::default()
+                            .fg(Color::LightGreen)
+                            .add_modifier(Modifier::BOLD),
+                    );
+                }
+                menu_item
+            })
+            .collect();
 
         let menu = List::new(menu_items);
 

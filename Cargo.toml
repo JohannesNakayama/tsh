@@ -16,3 +16,5 @@ rusqlite_migration = { version = "2.2.0", features = ["from-directory"] }
 ratatui = "0.29.0"
 crossterm = "0.29.0"
 color-eyre = "0.6.5"
+strum = { version = "0.27.1", features = ["derive"] }
+trait-variant = "0.1.2"
