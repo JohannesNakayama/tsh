@@ -1,5 +1,9 @@
 use ratatui::{
-    crossterm::event::{self, Event, KeyCode, KeyEvent}, layout::{Constraint, Direction, Layout}, style::{Color, Style}, widgets::{Block, BorderType, Borders, List, ListItem, Paragraph}, Frame
+    Frame,
+    crossterm::event::{self, Event, KeyCode, KeyEvent},
+    layout::{Constraint, Direction, Layout},
+    style::{Color, Style},
+    widgets::{Block, BorderType, Borders, List, ListItem, Paragraph},
 };
 use std::{error::Error, time::Duration};
 
@@ -72,16 +76,15 @@ fn view(frame: &mut Frame, model: &SearchFeature) {
         InputMode::Insert => Style::default().fg(Color::LightGreen),
     };
 
-    let search_input = Paragraph::new(model.input.as_str())
-        .style(style)
-        .block(
-            Block::default()
-                .borders(Borders::ALL)
-                .border_type(BorderType::Rounded)
-                .title("Input"),
-        );
+    let search_input = Paragraph::new(model.input.as_str()).style(style).block(
+        Block::default()
+            .borders(Borders::ALL)
+            .border_type(BorderType::Rounded)
+            .title("Input"),
+    );
 
-    let search_results = model.search_results
+    let search_results = model
+        .search_results
         .iter()
         .map(|result| ListItem::new(result.as_str()))
         .collect::<Vec<_>>();
@@ -96,25 +99,28 @@ async fn update(model: &mut SearchFeature, msg: Message) -> Result<(), Box<dyn E
     match msg {
         Message::ExitSearchFeature => {
             model.exit = true;
-        },
+        }
         Message::EnterInsertMode => {
             model.input_mode = InputMode::Insert;
-        },
+        }
         Message::ExitInsertMode => {
             model.input_mode = InputMode::Normal;
-        },
+        }
         Message::InsertCharacter(c) => {
             model.input.push(c);
-        },
+        }
         Message::DeleteCharacter => {
             model.input.pop();
-        },
+        }
         Message::SubmitQuery => {
             let zettels = find_zettels(&mut model.llm_client, model.input.as_str()).await?;
-            model.search_results = zettels.iter().map(|zettel| zettel.content.clone()).collect();
+            model.search_results = zettels
+                .iter()
+                .map(|zettel| zettel.content.clone())
+                .collect();
             model.input.clear();
             model.input_mode = InputMode::Normal;
-        },
+        }
     };
 
     Ok(())

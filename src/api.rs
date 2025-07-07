@@ -1,6 +1,12 @@
 use std::error::Error;
 
-use crate::{combine_zettel_contents, db::{find_zettels_by_embedding, get_db, store_zettel}, llm::LlmClient, model::Zettel, open_and_edit_neovim_buffer};
+use crate::{
+    combine_zettel_contents,
+    db::{find_zettels_by_embedding, get_db, store_zettel},
+    llm::LlmClient,
+    model::Zettel,
+    open_and_edit_neovim_buffer,
+};
 
 // TODO: separate workflow from logic here
 pub async fn add_zettel(
@@ -55,11 +61,6 @@ pub async fn find_zettels(
 
     Ok(zettels)
 }
-
-
-
-
-
 
 // pub async fn add_combined_zettel(llm_client: &mut LlmClient) -> Result<(), Box<dyn Error>> {
 //     println!("What topic would you like to write about?");

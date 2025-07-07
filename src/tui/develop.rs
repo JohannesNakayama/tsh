@@ -1,25 +1,25 @@
 use std::{error::Error, time::Duration};
 
-use ratatui::{crossterm::event::{self, Event, KeyCode, KeyEvent}, layout::{Constraint, Direction, Layout}, widgets::{List, ListItem}, Frame};
+use ratatui::{
+    Frame,
+    crossterm::event::{self, Event, KeyCode, KeyEvent},
+    layout::{Constraint, Direction, Layout},
+    widgets::{List, ListItem},
+};
 
 pub struct DevelopFeature {
     exit: bool,
 }
 
-
 impl DevelopFeature {
     pub fn new() -> Self {
-        DevelopFeature {
-            exit: false,
-        }
+        DevelopFeature { exit: false }
     }
 }
-
 
 enum Message {
     ExitDevelopFeature,
 }
-
 
 pub fn run(model: &mut DevelopFeature) -> Result<(), Box<dyn Error>> {
     let mut terminal = ratatui::init();
@@ -41,13 +41,12 @@ pub fn run(model: &mut DevelopFeature) -> Result<(), Box<dyn Error>> {
     Ok(())
 }
 
-
 pub fn view(frame: &mut Frame, _: &DevelopFeature) {
     let develop_layout = Layout::new(
         Direction::Vertical,
-        [Constraint::Length(3)],
+        [Constraint::Length(3), Constraint::Min(0)],
     )
-        .split(frame.area());
+    .split(frame.area());
 
     let options = vec![
         ListItem::new("Option 1"),
@@ -60,7 +59,6 @@ pub fn view(frame: &mut Frame, _: &DevelopFeature) {
     frame.render_widget(menu, develop_layout[0]);
 }
 
-
 fn update(model: &mut DevelopFeature, msg: Message) {
     match msg {
         Message::ExitDevelopFeature => {
@@ -68,7 +66,6 @@ fn update(model: &mut DevelopFeature, msg: Message) {
         }
     }
 }
-
 
 fn handle_event(_: &mut DevelopFeature) -> color_eyre::Result<Option<Message>> {
     if event::poll(Duration::from_millis(50))? {
@@ -88,4 +85,3 @@ fn handle_key(key: KeyEvent) -> Option<Message> {
         _ => None,
     }
 }
-
