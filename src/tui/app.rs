@@ -69,7 +69,7 @@ impl App {
         match command {
             AppCommand::Quit => {
                 self.should_quit = true;
-            }
+            } // TODO: open neovim buffer here, restore and re-init terminal
         }
     }
 
