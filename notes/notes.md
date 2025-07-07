@@ -12,8 +12,11 @@
 
 ## Next Steps
 
+- refactor:
+    - don't init a new terminal for each feature
+    - instead, clear screen and draw new frame
 
-develop a zettel:
+- develop a zettel:
     - entrypoint:
         - find by embedding (search bar with result list for selection)
         - most recent (result list for selection)
@@ -21,7 +24,7 @@ develop a zettel:
     - select zettel -> open and edit in neovim
     - store new zettel with old zettel id as parent id
 
-
+- load config from toml file
 
 - search
     - navigate through search results
@@ -38,4 +41,18 @@ develop a zettel:
 
 - store thought on save of vim buffer
     - keep buffer open, then save again on close
+
+
+## Screens
+
+- main screen:
+    - list of options/commands:
+        - enter zettel (-> open neovim buffer) -> save options screen
+        - 
+
+- 
+
+
+
+
 
