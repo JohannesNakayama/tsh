@@ -13,8 +13,9 @@ pub mod llm;
 pub mod model;
 pub mod tui {
     pub mod app;
-    pub mod search;
     pub mod develop;
+    pub mod main_menu;
+    pub mod search;
 }
 pub mod api;
 

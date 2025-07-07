@@ -1,7 +1,5 @@
 use std::error::Error;
-use tsh::{
-    db::migrate_to_latest, llm::LlmClient, tui::app::{self, App}
-};
+use tsh::{db::migrate_to_latest, llm::LlmClient, tui::app::App};
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn Error>> {
@@ -18,7 +16,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
 
     color_eyre::install()?; // TODO: where best to call this?
     let mut tsh_app = App::new(llm_client);
-    app::run(&mut tsh_app).await?;
+    tsh_app.run().await?;
 
     Ok(())
 }
