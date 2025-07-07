@@ -12,10 +12,6 @@
 
 ## Next Steps
 
-- refactor:
-    - don't init a new terminal for each feature
-    - instead, clear screen and draw new frame
-
 - develop a zettel:
     - entrypoint:
         - find by embedding (search bar with result list for selection)
@@ -43,15 +39,14 @@
     - keep buffer open, then save again on close
 
 
-## Screens
+## Concepts
 
-- main screen:
-    - list of options/commands:
-        - enter zettel (-> open neovim buffer) -> save options screen
-        - 
+Zettel workflows:
 
-- 
-
+- add
+- iterate
+- remix
+- mixin (special case of remix)
 
 
 
