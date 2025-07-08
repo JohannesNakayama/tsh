@@ -8,7 +8,7 @@ run:
 
 # Open interactive database session
 db:
-  litecli zettelkasten.db
+  litecli --liteclirc ./litecli-config zettelkasten.db
 
 # Reset database
 reset:

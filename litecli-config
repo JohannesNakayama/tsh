@@ -1,0 +1,2 @@
+[startup_commands]
+commands = ".load vec0/vec0"
