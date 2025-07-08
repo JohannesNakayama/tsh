@@ -186,27 +186,38 @@ impl Screen for IterateZettelScreen {
                 let mut item = ListItem::from(zettel);
                 if let Some(idx) = self.selected_result {
                     if i == idx {
-                        item = item.style(Style::default().bg(Color::DarkGray));
+                        item = item.style(
+                            Style::default()
+                                .bg(Color::DarkGray)
+                                .add_modifier(Modifier::BOLD),
+                        );
                     }
                 }
                 item
             })
             .collect();
 
-        let search_results_list = List::new(search_results);
+        let search_results_list = List::new(search_results).block(
+            Block::default()
+                .borders(Borders::ALL)
+                .border_type(BorderType::Rounded)
+                .title("Search Results"),
+        );
 
-        let preview = match self.selected_result {
+        let preview_paragraph = match self.selected_result {
             Some(idx) => {
                 let selected_zettel = &self.search_results[idx];
-                Paragraph::new(selected_zettel.content.to_string()).block(
-                    Block::default()
-                        .borders(Borders::ALL)
-                        .border_type(BorderType::Rounded)
-                        .title("Preview"),
-                )
+                Paragraph::new(selected_zettel.content.to_string())
             }
             None => Paragraph::default(),
         };
+
+        let preview = preview_paragraph.block(
+            Block::default()
+                .borders(Borders::ALL)
+                .border_type(BorderType::Rounded)
+                .title("Preview"),
+        );
 
         f.render_widget(search_box, layout[0]);
         f.render_widget(search_results_list, inner_layout[0]);
@@ -223,10 +234,7 @@ impl From<&Zettel> for ListItem<'_> {
                     .add_modifier(Modifier::ITALIC)
                     .fg(Color::LightBlue),
             ),
-            Line::styled(
-                format!("[{}]: {}", zettel.id, zettel.content),
-                Style::default(),
-            ),
+            Line::styled(format!("{}", zettel.content), Style::default()),
         ];
         ListItem::new(lines)
     }
