@@ -18,12 +18,17 @@ pub async fn add_zettel(
 
     match open_and_edit_neovim_buffer(Some(combine_zettel_contents(parents.to_vec()).as_str())) {
         Ok(edited_content) => {
-            if edited_content.is_empty() {
+            // Don't save if:
+            // - only one parent and content unchanged
+            // - empty zettel
+            let one_parent_and_content_unchanged =
+                (parents.len() == 1) && (edited_content == parents.first().unwrap().content);
+            if one_parent_and_content_unchanged || edited_content.is_empty() {
                 return Ok(());
             }
 
             if let Ok(embedding) = llm_client.embed(&edited_content).await {
-                let parent_ids = parents.iter().map(|zettel| zettel.id).collect();
+                let parent_ids: Vec<i64> = parents.iter().map(|zettel| zettel.id).collect();
 
                 let mut conn = get_db(db_path).await?;
                 let tx = conn.transaction()?;

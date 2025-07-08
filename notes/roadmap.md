@@ -1,8 +1,6 @@
 
 ## Next Steps
 
-- [ ] in iteration: if content is exactly the same, don't save as a new zettel
-
 - [ ] on iteration screen:
     - [ ] display date as date, not unix timestamp
     - [ ] only display content shim on list item
