@@ -88,7 +88,7 @@ pub async fn find_zettels_by_embedding(
         from zettel z
         join zettel_embedding ze on z.id = ze.zettel_id
         where ze.embedding match ?
-        and k = 3
+        and k = 15
         ",
     )?;
 

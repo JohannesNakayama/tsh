@@ -103,6 +103,7 @@ impl App {
                         // Open an empty Zettel in neovim buffer
                         ratatui::restore();
                         add_zettel(&parents).await?;
+                        self.current_screen = ActiveScreenType::Main(MainMenuScreen::new());
                         terminal = ratatui::init();
                     }
                     _ => {

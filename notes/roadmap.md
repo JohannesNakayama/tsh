@@ -12,34 +12,30 @@
 
 ## Next Steps
 
-- develop a zettel:
-    - entrypoint:
-        - find by embedding (search bar with result list for selection)
-        - most recent (result list for selection)
-        - (select date range)
-    - select zettel -> open and edit in neovim
-    - store new zettel with old zettel id as parent id
+- [ ] develop a zettel:
+    - [ ] entrypoint:
+        - [x] find by embedding (search bar with result list for selection)
+        - [ ] most recent (result list for selection)
+        <!-- - [ ] select date range -->
+    - [x] select zettel -> open and edit in neovim
+    - [x] store new zettel with old zettel id as parent id
 
-- load config from toml file
+- [ ] load config from toml file
 
-- search
-    - navigate through search results
-    - select multiple results and store them as app state
+- [ ] promote thoughts to texts
+    - [ ] new struct for texts (with titles, etc.)
 
-- promote thoughts to texts
-    - new struct for texts (with titles, etc.)
+- [ ] function for remixing only root ideas (otherwise the same idea could end up in a thought twice)
 
-- function for remixing only root ideas (otherwise the same idea could end up in a thought twice)
+- [ ] add tagging
+    - [ ] automatic tagging with ollama model
+    - [ ] manual tagging for organization
 
-- add tagging
-    - automatic tagging with ollama model
-    - manual tagging for organization
+- [ ] store thought on save of vim buffer
+    - [ ] keep buffer open, then save again on close
 
-- store thought on save of vim buffer
-    - keep buffer open, then save again on close
-
-- fix flickering when entering/exiting neovim
-    - embedded neovim instance with nvim-rs
+- [ ] fix flickering when entering/exiting neovim
+    - [ ] embedded neovim instance with nvim-rs
 
 ## Concepts
 
