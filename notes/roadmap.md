@@ -1,10 +1,6 @@
 
 ## Next Steps
 
-- [ ] query functionality:
-    - [ ] lineage table (with trigger) to keep track of ancestor relations
-    - [ ] tree depth on zettels
-
 - [ ] create nix package
 
 - [ ] add logging/tracing
