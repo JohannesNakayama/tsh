@@ -1,10 +1,6 @@
 
 ## Next Steps
 
-- [ ] on iteration screen:
-    - [ ] display date as date, not unix timestamp
-    - [ ] only display content shim on list item
-
 - [ ] query functionality:
     - [ ] lineage table (with trigger) to keep track of ancestor relations
     - [ ] tree depth on zettels
