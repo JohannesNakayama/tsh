@@ -62,39 +62,3 @@ pub async fn find_zettels(
 
     Ok(zettels)
 }
-
-// pub async fn add_combined_zettel(llm_client: &mut LlmClient) -> Result<(), Box<dyn Error>> {
-//     println!("What topic would you like to write about?");
-//     let query = get_user_input();
-//     let zettels = find_zettels(llm_client, &query).await?;
-//     let buffer_content = combine_zettel_contents(zettels.clone());
-//     match open_and_edit_neovim_buffer(Some(&buffer_content)) {
-//         Ok(edited_content) => {
-//             // println!("\nNeovim closed. Edited content retrieved:");
-//             // println!("```");
-//             // println!("{}", edited_content);
-//             // println!("```");
-
-//             let parent_ids: Vec<i64> = zettels.iter().map(|t| t.id).collect();
-
-//             let mut conn = get_db("my_thoughts.db").await?;
-//             let tx = conn.transaction()?;
-
-//             if let Ok(embedding) = llm_client.embed(&edited_content).await {
-//                 match store_zettel(&tx, &edited_content, embedding, parent_ids).await {
-//                     Ok(_) => {
-//                         tx.commit()?;
-//                         // println!("Application finished successfully.");
-//                     }
-//                     Err(_) => {
-//                         tx.rollback()?;
-//                         // eprintln!("Error storing content: {}", e)
-//                     }
-//                 }
-//             }
-//         }
-//         Err(e) => eprintln!("Error interacting with Neovim: {}", e),
-//     }
-
-//     Ok(())
-// }
