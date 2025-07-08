@@ -20,8 +20,6 @@
     - [x] select zettel -> open and edit in neovim
     - [x] store new zettel with old zettel id as parent id
 
-- [ ] load config from toml file
-
 - [ ] promote thoughts to texts
     - [ ] new struct for texts (with titles, etc.)
 

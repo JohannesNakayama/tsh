@@ -5,6 +5,7 @@ use ratatui::{
 use std::error::Error;
 
 use crate::{
+    AppConfig,
     api::add_zettel,
     model::Zettel,
     tui::{iterate::IterateZettelScreen, main_menu::MainMenuScreen},
@@ -30,16 +31,40 @@ pub trait Screen {
     fn draw(&mut self, frame: &mut Frame);
 }
 
+#[derive(Debug, Clone)]
+pub struct LlmConfig {
+    pub api_base: String,
+    pub api_key: String,
+    pub embeddings_model: String,
+}
+
+impl From<&AppConfig> for LlmConfig {
+    fn from(config: &AppConfig) -> Self {
+        LlmConfig {
+            api_base: config.api_base.clone(),
+            api_key: config.api_key.clone(),
+            embeddings_model: config.embeddings_model.clone(),
+        }
+    }
+}
+
 pub struct App {
     should_quit: bool,
     current_screen: ActiveScreenType,
+    db_path: String,
+    llm_config: LlmConfig,
 }
 
 impl App {
-    pub fn new() -> Self {
+    pub fn new(db_path: String, llm_config: LlmConfig) -> Self {
         Self {
             should_quit: false,
-            current_screen: ActiveScreenType::Main(MainMenuScreen::new()),
+            current_screen: ActiveScreenType::Main(MainMenuScreen::new(
+                db_path.clone(),
+                llm_config.clone(),
+            )),
+            db_path,
+            llm_config,
         }
     }
 
@@ -102,8 +127,11 @@ impl App {
                         // TODO: maybe use embedded neovim to avoid flickering (-> nvim-rs)
                         // Open an empty Zettel in neovim buffer
                         ratatui::restore();
-                        add_zettel(&parents).await?;
-                        self.current_screen = ActiveScreenType::Main(MainMenuScreen::new());
+                        add_zettel(&self.db_path, &self.llm_config, &parents).await?;
+                        self.current_screen = ActiveScreenType::Main(MainMenuScreen::new(
+                            self.db_path.clone(),
+                            self.llm_config.clone(),
+                        ));
                         terminal = ratatui::init();
                     }
                     _ => {

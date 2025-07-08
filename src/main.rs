@@ -1,15 +1,17 @@
 use std::error::Error;
-use tsh::{db::migrate_to_latest, tui::app::App};
+use tsh::{
+    db::migrate_to_latest,
+    load_config,
+    tui::app::{App, LlmConfig},
+};
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn Error>> {
-    // TODO: load from config, not env
-    let db_url = std::env::var("DATABASE_URL")?;
+    let config = load_config("./example_config.toml")?;
+    let llm_config = LlmConfig::from(&config);
+    migrate_to_latest(&config.db_path).await?;
 
-    migrate_to_latest(&db_url).await?;
-
-    color_eyre::install()?; // TODO: where best to call this?
-    let mut tsh_app = App::new();
+    let mut tsh_app = App::new(config.db_path, llm_config);
     tsh_app.run().await?;
 
     Ok(())

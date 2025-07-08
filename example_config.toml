@@ -1,0 +1,7 @@
+db_path="zettelkasten.db"
+
+# llm config
+api_base="http://localhost:11434/v1"
+api_key="ollama" # maybe load from env var, for ollama, it's irrelevant though
+embeddings_model="all-minilm:latest"
+

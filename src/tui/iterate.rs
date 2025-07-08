@@ -13,7 +13,7 @@ use crate::{
     api::find_zettels,
     model::Zettel,
     tui::{
-        app::{ActiveScreenType, AppCommand, Screen},
+        app::{ActiveScreenType, AppCommand, LlmConfig, Screen},
         main_menu::MainMenuScreen,
     },
 };
@@ -23,6 +23,8 @@ pub struct IterateZettelScreen {
     search_query: String,
     search_results: Vec<Zettel>,
     selected_result: Option<usize>,
+    db_path: String,
+    llm_config: LlmConfig,
 }
 
 enum InputMode {
@@ -43,12 +45,14 @@ enum IterateScreenMessage {
 }
 
 impl IterateZettelScreen {
-    pub fn new() -> Self {
+    pub fn new(db_path: String, llm_config: LlmConfig) -> Self {
         Self {
             input_mode: InputMode::Normal,
             search_query: String::new(),
             search_results: vec![],
             selected_result: None,
+            db_path,
+            llm_config,
         }
     }
 
@@ -96,7 +100,7 @@ impl IterateZettelScreen {
                 self.search_query.pop();
             }
             IterateScreenMessage::SubmitQuery(query) => {
-                self.search_results = find_zettels(&query).await?;
+                self.search_results = find_zettels(&self.db_path, &self.llm_config, &query).await?;
                 if self.search_results.len() != 0 {
                     self.selected_result = Some(0);
                 }
@@ -128,9 +132,11 @@ impl Screen for IterateZettelScreen {
     ) -> Result<Option<AppCommand>, Box<dyn Error>> {
         if let Some(msg) = self.handle_key_event_internal(key) {
             match msg {
-                IterateScreenMessage::BackToMainMenu => Ok(Some(AppCommand::SwitchScreen(
-                    ActiveScreenType::Main(MainMenuScreen::new()),
-                ))),
+                IterateScreenMessage::BackToMainMenu => {
+                    Ok(Some(AppCommand::SwitchScreen(ActiveScreenType::Main(
+                        MainMenuScreen::new(self.db_path.clone(), self.llm_config.clone()),
+                    ))))
+                }
                 IterateScreenMessage::IterateZettel(zettel) => {
                     Ok(Some(AppCommand::AddZettel(vec![zettel])))
                 }

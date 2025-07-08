@@ -10,12 +10,14 @@ use ratatui::{
 use strum::{Display, EnumIter, FromRepr, IntoEnumIterator};
 
 use crate::tui::{
-    app::{ActiveScreenType, AppCommand, Screen},
+    app::{ActiveScreenType, AppCommand, LlmConfig, Screen},
     iterate::IterateZettelScreen,
 };
 
 pub struct MainMenuScreen {
     selected_action: Action,
+    db_path: String,
+    llm_config: LlmConfig,
 }
 
 #[derive(Default, Clone, Copy, Display, FromRepr, EnumIter, PartialEq, Eq)]
@@ -49,9 +51,11 @@ enum MainMenuMessage {
 }
 
 impl MainMenuScreen {
-    pub fn new() -> Self {
+    pub fn new(db_path: String, llm_config: LlmConfig) -> Self {
         Self {
             selected_action: Action::AddZettel,
+            db_path,
+            llm_config,
         }
     }
 
@@ -89,9 +93,11 @@ impl Screen for MainMenuScreen {
                 MainMenuMessage::QuitApp => Ok(Some(AppCommand::Quit)),
                 MainMenuMessage::DoAction(action) => match action {
                     Action::AddZettel => Ok(Some(AppCommand::AddZettel(vec![]))),
-                    Action::IterateZettel => Ok(Some(AppCommand::SwitchScreen(
-                        ActiveScreenType::Iterate(IterateZettelScreen::new()),
-                    ))),
+                    Action::IterateZettel => {
+                        Ok(Some(AppCommand::SwitchScreen(ActiveScreenType::Iterate(
+                            IterateZettelScreen::new(self.db_path.clone(), self.llm_config.clone()),
+                        ))))
+                    }
                 },
                 _ => {
                     self.update(msg).await?;

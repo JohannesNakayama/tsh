@@ -67,7 +67,7 @@ fn update(model: &mut DevelopFeature, msg: Message) {
     }
 }
 
-fn handle_event(_: &mut DevelopFeature) -> color_eyre::Result<Option<Message>> {
+fn handle_event(_: &mut DevelopFeature) -> Result<Option<Message>, Box<dyn Error>> {
     if event::poll(Duration::from_millis(50))? {
         if let Event::Key(key) = event::read()? {
             if key.kind == event::KeyEventKind::Press {

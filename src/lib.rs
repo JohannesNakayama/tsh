@@ -1,3 +1,4 @@
+use serde::Deserialize;
 use std::error::Error;
 use std::fs;
 use std::io::{Read, Write};
@@ -15,9 +16,23 @@ pub mod tui {
     pub mod develop;
     pub mod iterate;
     pub mod main_menu;
-    // pub mod search;
 }
 pub mod api;
+
+#[derive(Debug, Deserialize)]
+pub struct AppConfig {
+    pub db_path: String,
+    pub api_base: String,
+    pub api_key: String,
+    pub embeddings_model: String,
+}
+
+pub fn load_config(cfg_path: &str) -> Result<AppConfig, Box<dyn Error>> {
+    fs::read_to_string(cfg_path)
+        .map_err(|e| e.into())
+        .and_then(|content| toml::from_str(&content).map_err(|e| Box::new(e) as Box<dyn Error>))
+        .map(|config: AppConfig| config)
+}
 
 /// Opens Neovim with a temporary buffer, optionally populated with initial data.
 /// It waits for Neovim to close, then returns the final content of the buffer.
