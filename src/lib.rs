@@ -4,7 +4,6 @@ use std::io::{Read, Write};
 use std::process::{Command, Stdio};
 use tempfile::NamedTempFile;
 
-use crate::api::find_zettels;
 use crate::db::{get_db, store_article};
 use crate::model::{Article, Zettel};
 
@@ -14,8 +13,9 @@ pub mod model;
 pub mod tui {
     pub mod app;
     pub mod develop;
+    pub mod iterate;
     pub mod main_menu;
-    pub mod search;
+    // pub mod search;
 }
 pub mod api;
 
@@ -64,14 +64,6 @@ pub fn open_and_edit_neovim_buffer(
 
     Ok(edited_content)
 }
-
-// pub fn get_user_input() -> String {
-//     print!("> ");
-//     io::stdout().flush().unwrap(); // Ensure the prompt is displayed
-//     let mut input = String::new();
-//     io::stdin().read_line(&mut input).unwrap();
-//     input.trim().to_string()
-// }
 
 pub fn combine_zettel_contents(zettels: Vec<Zettel>) -> String {
     zettels

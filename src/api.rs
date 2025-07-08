@@ -9,10 +9,9 @@ use crate::{
 };
 
 // TODO: separate workflow from logic here
-pub async fn add_zettel(
-    llm_client: &mut LlmClient,
-    parents: &Vec<Zettel>,
-) -> Result<(), Box<dyn Error>> {
+pub async fn add_zettel(parents: &Vec<Zettel>) -> Result<(), Box<dyn Error>> {
+    let mut llm_client = LlmClient::default()?;
+
     match open_and_edit_neovim_buffer(Some(combine_zettel_contents(parents.to_vec()).as_str())) {
         Ok(edited_content) => {
             if edited_content.is_empty() {
@@ -42,17 +41,10 @@ pub async fn add_zettel(
     Ok(())
 }
 
-pub async fn find_zettels(
-    llm_client: &mut LlmClient,
-    query: &str,
-) -> Result<Vec<Zettel>, rusqlite::Error> {
-    let query_embedding = match llm_client.embed(query).await {
-        Ok(result) => result,
-        Err(e) => {
-            eprintln!("Error embedding query: {}", e);
-            return Err(rusqlite::Error::InvalidQuery);
-        }
-    };
+pub async fn find_zettels(query: &str) -> Result<Vec<Zettel>, Box<dyn Error>> {
+    let mut llm_client = LlmClient::default()?;
+
+    let query_embedding = llm_client.embed(query).await?;
 
     let mut conn = get_db("my_thoughts.db").await?;
     let tx = conn.transaction()?;

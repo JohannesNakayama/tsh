@@ -29,6 +29,20 @@ impl LlmClient {
         }
     }
 
+    pub fn default() -> Result<Self, Box<dyn Error>> {
+        // TODO: load from config, not env
+        let api_base = std::env::var("API_BASE")?;
+        let api_key = std::env::var("API_KEY")?;
+        let embedding_model = std::env::var("EMBEDDINGS_MODEL")?;
+        let chat_model = std::env::var("CHAT_MODEL")?;
+        Ok(LlmClient {
+            api_base,
+            api_key,
+            embedding_model,
+            chat_model,
+        })
+    }
+
     pub async fn embed(&mut self, content: &str) -> Result<Vec<f32>, Box<dyn Error>> {
         let client = Client::with_config(
             OpenAIConfig::new()

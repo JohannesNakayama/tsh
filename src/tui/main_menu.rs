@@ -9,7 +9,10 @@ use ratatui::{
 };
 use strum::{Display, EnumIter, FromRepr, IntoEnumIterator};
 
-use crate::tui::app::{AppCommand, Screen};
+use crate::tui::{
+    app::{ActiveScreenType, AppCommand, Screen},
+    iterate::IterateZettelScreen,
+};
 
 pub struct MainMenuScreen {
     selected_action: Action,
@@ -84,15 +87,12 @@ impl Screen for MainMenuScreen {
         if let Some(msg) = self.handle_key_event_internal(key) {
             match msg {
                 MainMenuMessage::QuitApp => Ok(Some(AppCommand::Quit)),
-                MainMenuMessage::DoAction(action) => {
-                    match action {
-                        Action::AddZettel => Ok(Some(AppCommand::AddZettel(vec![]))),
-                        Action::IterateZettel => {
-                            // TODO
-                            Ok(None)
-                        }
-                    }
-                }
+                MainMenuMessage::DoAction(action) => match action {
+                    Action::AddZettel => Ok(Some(AppCommand::AddZettel(vec![]))),
+                    Action::IterateZettel => Ok(Some(AppCommand::SwitchScreen(
+                        ActiveScreenType::Iterate(IterateZettelScreen::new()),
+                    ))),
+                },
                 _ => {
                     self.update(msg).await?;
                     Ok(None)

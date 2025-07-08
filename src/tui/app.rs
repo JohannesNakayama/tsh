@@ -4,15 +4,21 @@ use ratatui::{
 };
 use std::error::Error;
 
-use crate::{api::add_zettel, llm::LlmClient, model::Zettel, tui::main_menu::MainMenuScreen};
+use crate::{
+    api::add_zettel,
+    model::Zettel,
+    tui::{iterate::IterateZettelScreen, main_menu::MainMenuScreen},
+};
 
 pub enum ActiveScreenType {
     Main(MainMenuScreen),
+    Iterate(IterateZettelScreen),
 }
 
 pub enum AppCommand {
     Quit,
     AddZettel(Vec<Zettel>),
+    SwitchScreen(ActiveScreenType),
 }
 
 #[trait_variant::make(ScreenMulti: Send)]
@@ -26,17 +32,13 @@ pub trait Screen {
 
 pub struct App {
     should_quit: bool,
-    llm_client: LlmClient,
     current_screen: ActiveScreenType,
 }
 
 impl App {
-    pub fn new(llm_client: LlmClient) -> Self {
-        // TODO: refactor (use reference of llm client instead)
-        // TODO: understand lifetimes properly...
+    pub fn new() -> Self {
         Self {
             should_quit: false,
-            llm_client: llm_client.clone(),
             current_screen: ActiveScreenType::Main(MainMenuScreen::new()),
         }
     }
@@ -45,12 +47,16 @@ impl App {
         if event::poll(std::time::Duration::from_millis(50))? {
             if let Event::Key(key) = event::read()? {
                 if key.kind == event::KeyEventKind::Press {
-                    match &mut self.current_screen {
+                    return match &mut self.current_screen {
                         ActiveScreenType::Main(screen) => {
                             let maybe_action = screen.handle_key_event(key).await?;
-                            return Ok(maybe_action);
-                        } // TODO: add handling for other screens
-                    }
+                            Ok(maybe_action)
+                        }
+                        ActiveScreenType::Iterate(screen) => {
+                            let maybe_action = screen.handle_key_event(key).await?;
+                            Ok(maybe_action)
+                        }
+                    };
                 }
             }
         }
@@ -63,6 +69,9 @@ impl App {
             ActiveScreenType::Main(screen) => {
                 screen.draw(frame);
             }
+            ActiveScreenType::Iterate(screen) => {
+                screen.draw(frame);
+            }
         }
     }
 
@@ -71,6 +80,14 @@ impl App {
             AppCommand::Quit => {
                 self.should_quit = true;
             }
+            AppCommand::SwitchScreen(screen_type) => match screen_type {
+                ActiveScreenType::Main(screen) => {
+                    self.current_screen = ActiveScreenType::Main(screen);
+                }
+                ActiveScreenType::Iterate(screen) => {
+                    self.current_screen = ActiveScreenType::Iterate(screen);
+                }
+            },
             _ => {}
         }
     }
@@ -85,7 +102,7 @@ impl App {
                         // TODO: maybe use embedded neovim to avoid flickering (-> nvim-rs)
                         // Open an empty Zettel in neovim buffer
                         ratatui::restore();
-                        add_zettel(&mut self.llm_client, &parents).await?;
+                        add_zettel(&parents).await?;
                         terminal = ratatui::init();
                     }
                     _ => {
