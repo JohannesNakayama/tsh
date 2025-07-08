@@ -9,7 +9,6 @@ use crate::{
     tui::app::LlmConfig,
 };
 
-// TODO: separate workflow from logic here
 pub async fn add_zettel(
     db_path: &str,
     llm_config: &LlmConfig,
@@ -31,11 +30,10 @@ pub async fn add_zettel(
                 match store_zettel(&tx, &edited_content, embedding.clone(), parent_ids).await {
                     Ok(_) => {
                         tx.commit()?;
-                        // println!("Application finished successfully.");
                     }
-                    Err(_) => {
+                    Err(e) => {
                         tx.rollback()?;
-                        // eprintln!("Error storing content: {}", e);
+                        eprintln!("Error storing content: {}", e); // TODO: logging
                     }
                 }
             }

@@ -8,6 +8,7 @@ use zerocopy::IntoBytes;
 
 use crate::model::{Article, Zettel};
 
+// TODO: move migrations dir to canonical location or specify in config.toml
 static MIGRATIONS_DIR: Dir = include_dir!("$CARGO_MANIFEST_DIR/migrations");
 
 static MIGRATIONS: LazyLock<Migrations<'static>> =
