@@ -2,6 +2,7 @@
 ## Next Steps
 
 - [ ] create nix package
+    - [ ] https://m7.rs/blog/2022-11-01-package-a-rust-app-with-nix/index.html
 
 - [ ] add logging/tracing
 

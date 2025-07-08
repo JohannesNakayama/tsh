@@ -1,6 +1,7 @@
 .env
 *.db
 *.txt
+result
 
 # Added by cargo
 

@@ -1,4 +1,6 @@
 {
+  description = "Development environment for tsh";
+
   inputs = {
     nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
     rust-overlay.url = "github:oxalica/rust-overlay";
@@ -17,7 +19,6 @@
         config.allowUnfree = false;
       };
       rustToolchain = pkgs.rust-bin.fromRustupToolchainFile ./rust-toolchain.toml;
-      # rustDevPkgs = [ rustToolchain ] ++ (with pkgs; [ cargo-watch rust-analyzer ]);
       rustDevPkgs = [ rustToolchain ] ++ (with pkgs; [ rust-analyzer ]);
     in {
       devShells.default = pkgs.mkShell {
