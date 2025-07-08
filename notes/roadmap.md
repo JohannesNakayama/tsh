@@ -1,16 +1,19 @@
-# Idea
-
-- note down small ideas
-- iterate ideas
-- retrieve similar ideas
-- group them together
-- create larger text units
-- eventually, export texts (essays, posts, book chapters, etc.)
-
-- add tags (auto tag?)
-- add sources
 
 ## Next Steps
+
+- [ ] in iteration: if content is exactly the same, don't save as a new zettel
+
+- [ ] on iteration screen:
+    - [ ] display date as date, not unix timestamp
+    - [ ] only display content shim on list item
+
+- [ ] query functionality:
+    - [ ] lineage table (with trigger) to keep track of ancestor relations
+    - [ ] tree depth on zettels
+
+- [ ] create nix package
+
+- [ ] add logging/tracing
 
 - [ ] develop a zettel:
     - [ ] entrypoint:
@@ -35,6 +38,7 @@
 - [ ] fix flickering when entering/exiting neovim
     - [ ] embedded neovim instance with nvim-rs
 
+
 ## Concepts
 
 Zettel workflows:
@@ -45,5 +49,10 @@ Zettel workflows:
 - mixin (special case of remix)
 
 
+## Ideas
 
-
+- add tags (auto tag?)
+- add sources
+    - automatically scrape, describe, embed websites
+    - load from DOI
+    - add manually (books, articles, etc.)
