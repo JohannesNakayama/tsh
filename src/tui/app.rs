@@ -4,7 +4,7 @@ use ratatui::{
 };
 use std::error::Error;
 
-use crate::{llm::LlmClient, tui::main_menu::MainMenuScreen};
+use crate::{api::add_zettel, llm::LlmClient, model::Zettel, tui::main_menu::MainMenuScreen};
 
 pub enum ActiveScreenType {
     Main(MainMenuScreen),
@@ -12,6 +12,7 @@ pub enum ActiveScreenType {
 
 pub enum AppCommand {
     Quit,
+    AddZettel(Vec<Zettel>),
 }
 
 #[trait_variant::make(ScreenMulti: Send)]
@@ -25,7 +26,7 @@ pub trait Screen {
 
 pub struct App {
     should_quit: bool,
-    // llm_client: LlmClient,
+    llm_client: LlmClient,
     current_screen: ActiveScreenType,
 }
 
@@ -35,8 +36,8 @@ impl App {
         // TODO: understand lifetimes properly...
         Self {
             should_quit: false,
-            // llm_client: llm_client.clone(),
-            current_screen: ActiveScreenType::Main(MainMenuScreen::new(llm_client.clone())),
+            llm_client: llm_client.clone(),
+            current_screen: ActiveScreenType::Main(MainMenuScreen::new()),
         }
     }
 
@@ -69,7 +70,8 @@ impl App {
         match command {
             AppCommand::Quit => {
                 self.should_quit = true;
-            } // TODO: open neovim buffer here, restore and re-init terminal
+            }
+            _ => {}
         }
     }
 
@@ -78,7 +80,18 @@ impl App {
 
         loop {
             if let Some(command) = self.handle_event().await? {
-                self.process_app_command(command);
+                match command {
+                    AppCommand::AddZettel(parents) => {
+                        // TODO: maybe use embedded neovim to avoid flickering (-> nvim-rs)
+                        // Open an empty Zettel in neovim buffer
+                        ratatui::restore();
+                        add_zettel(&mut self.llm_client, &parents).await?;
+                        terminal = ratatui::init();
+                    }
+                    _ => {
+                        self.process_app_command(command);
+                    }
+                }
             }
 
             if self.should_quit {

@@ -9,14 +9,9 @@ use ratatui::{
 };
 use strum::{Display, EnumIter, FromRepr, IntoEnumIterator};
 
-use crate::{
-    api::add_zettel,
-    llm::LlmClient,
-    tui::app::{AppCommand, Screen},
-};
+use crate::tui::app::{AppCommand, Screen};
 
 pub struct MainMenuScreen {
-    llm_client: LlmClient,
     selected_action: Action,
 }
 
@@ -51,9 +46,8 @@ enum MainMenuMessage {
 }
 
 impl MainMenuScreen {
-    pub fn new(llm_client: LlmClient) -> Self {
+    pub fn new() -> Self {
         Self {
-            llm_client,
             selected_action: Action::AddZettel,
         }
     }
@@ -76,17 +70,6 @@ impl MainMenuScreen {
             MainMenuMessage::MoveUp => {
                 self.selected_action = self.selected_action.previous();
             }
-            MainMenuMessage::DoAction(action) => {
-                match action {
-                    Action::AddZettel => {
-                        // Open an empty Zettel in neovim buffer, no need for new screen
-                        add_zettel(&mut self.llm_client, &vec![]).await?;
-                    }
-                    Action::IterateZettel => {
-                        // TODO
-                    }
-                }
-            }
             _ => {}
         };
         Ok(())
@@ -101,6 +84,15 @@ impl Screen for MainMenuScreen {
         if let Some(msg) = self.handle_key_event_internal(key) {
             match msg {
                 MainMenuMessage::QuitApp => Ok(Some(AppCommand::Quit)),
+                MainMenuMessage::DoAction(action) => {
+                    match action {
+                        Action::AddZettel => Ok(Some(AppCommand::AddZettel(vec![]))),
+                        Action::IterateZettel => {
+                            // TODO
+                            Ok(None)
+                        }
+                    }
+                }
                 _ => {
                     self.update(msg).await?;
                     Ok(None)

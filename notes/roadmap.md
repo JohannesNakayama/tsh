@@ -38,6 +38,8 @@
 - store thought on save of vim buffer
     - keep buffer open, then save again on close
 
+- fix flickering when entering/exiting neovim
+    - embedded neovim instance with nvim-rs
 
 ## Concepts
 
