@@ -8,8 +8,8 @@ run:
 
 # Open interactive database session
 db:
-  litecli my_thoughts.db
+  litecli zettelkasten.db
 
 # Reset database
 reset:
-  rm -f my_thoughts.db
+  rm -f zettelkasten.db
