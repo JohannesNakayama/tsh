@@ -4,12 +4,7 @@ pkgs.rustPlatform.buildRustPackage rec {
   pname = "tsh";
   version = "0.1.0";
 
-  src = pkgs.fetchFromGitHub {
-    owner = "JohannesNakayama";
-    repo = "tsh";
-    rev = "main";
-    hash = "sha256-hTYnP3sMyskrvMrNooO9MZhJurrmb9NfERKZzUfQsHs=";
-  };
+  src = ./.;
 
   cargoHash = "sha256-U4/7VqA1pWov2DR76KYfoZKydQMXyh7bPTUlfvHyHQI=";
 

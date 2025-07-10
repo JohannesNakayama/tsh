@@ -1,5 +1,5 @@
 {
-  description = "Development environment for tsh";
+  description = "Flake for tsh - a simple tool to help you think";
 
   inputs = {
     nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
@@ -25,8 +25,11 @@
         packages = with pkgs; rustDevPkgs;
         RUST_SRC_PATH = "${rustToolchain}/lib/rustlib/src/rust/library";
       };
+
+      packages.tsh = pkgs.callPackage ./default.nix {};
+
       packages.rustEnv = pkgs.buildEnv {
-        name = "arcagent-dev";
+        name = "tsh-dev";
         paths = with pkgs; [ rustToolchain ] ++ [
           rust-analyzer
           gcc
