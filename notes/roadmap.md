@@ -1,21 +1,18 @@
 
 ## Next Steps
 
-- [ ] create nix package
-    - [ ] https://m7.rs/blog/2022-11-01-package-a-rust-app-with-nix/index.html
+- [ ] config
+    - [ ] put default config (if one doesn't exist) into $XDG_CONFIG_HOME/tsh/config.toml on first startup (use `directories` crate)
+    - [ ] put database into ~/.local/share/tsh/ (incl. migrations!)
+    - [ ] create an isolated dev environment (to not mess with existing zettelkasten)
 
 - [ ] add logging/tracing
 
-- [ ] develop a zettel:
-    - [ ] entrypoint:
-        - [x] find by embedding (search bar with result list for selection)
-        - [ ] most recent (result list for selection)
-        <!-- - [ ] select date range -->
-    - [x] select zettel -> open and edit in neovim
-    - [x] store new zettel with old zettel id as parent id
+- [ ] new develop zettel workflow:
+    - [ ] entrypoint: most recent (result list for selection)
 
-- [ ] promote thoughts to texts
-    - [ ] new struct for texts (with titles, etc.)
+- [ ] promote zettels to articles
+    - [ ] implement functionality in tui
 
 - [ ] function for remixing only root ideas (otherwise the same idea could end up in a thought twice)
 
