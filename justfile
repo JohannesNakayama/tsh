@@ -2,9 +2,9 @@
 _default:
   @just --list --unsorted
 
-# Run program
-run:
-  cargo run
+# Run program (with example config for development)
+dev:
+  cargo run -- example_config.toml
 
 # Open interactive database session
 db:

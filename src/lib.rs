@@ -21,14 +21,22 @@ pub mod api;
 
 #[derive(Debug, Deserialize)]
 pub struct AppConfig {
-    pub db_path: String,
+    pub data_dir: Option<String>,
     pub api_base: String,
     pub api_key: String,
     pub embeddings_model: String,
 }
 
-pub fn load_config(cfg_path: &str) -> Result<AppConfig, Box<dyn Error>> {
-    fs::read_to_string(cfg_path)
+pub fn load_config(cfg_path: Option<String>) -> Result<AppConfig, Box<dyn Error>> {
+    let path = match cfg_path {
+        Some(path) => path,
+        None => {
+            let home_dir = std::env::var("HOME")?;
+            let path = format!("{}/.config/tsh/config.toml", home_dir);
+            path
+        },
+    };
+    fs::read_to_string(path)
         .map_err(|e| e.into())
         .and_then(|content| toml::from_str(&content).map_err(|e| Box::new(e) as Box<dyn Error>))
         .map(|config: AppConfig| config)
@@ -88,8 +96,8 @@ pub fn combine_zettel_contents(zettels: Vec<Zettel>) -> String {
         .join("\n\n")
 }
 
-pub async fn promote_zettel(zettel: Zettel, title: &str) -> Result<Article, rusqlite::Error> {
-    let mut conn = get_db("my_thoughts.db").await?;
+pub async fn promote_zettel(zettel: Zettel, title: &str, db_path: &str) -> Result<Article, rusqlite::Error> {
+    let mut conn = get_db(db_path).await?;
     let tx = conn.transaction()?;
     let article = store_article(&tx, zettel.id, title, &zettel.content).await?;
     tx.commit()?;

@@ -1,6 +1,4 @@
-db_path="zettelkasten.db"
-
-# llm config
+data_dir="." # for local development, store test data in current dir
 api_base="http://localhost:11434/v1"
 api_key="ollama" # maybe load from env var, for ollama, it's irrelevant though
 embeddings_model="all-minilm:latest"

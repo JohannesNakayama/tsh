@@ -1,10 +1,7 @@
 
 ## Next Steps
 
-- [ ] config
-    - [ ] put default config (if one doesn't exist) into $XDG_CONFIG_HOME/tsh/config.toml on first startup (use `directories` crate)
-    - [ ] put database into ~/.local/share/tsh/ (incl. migrations!)
-    - [ ] create an isolated dev environment (to not mess with existing zettelkasten)
+- [ ] how are migrations packaged when compiling the program? do I have to put them into the data dir too?
 
 - [ ] add logging/tracing
 
