@@ -3,6 +3,8 @@
 
 - [ ] install package via home manager and start using
 
+- [ ] use flake-parts or manual setup in flake instead of flake-utils?
+
 - [ ] how are migrations packaged when compiling the program? do I have to put them into the data dir too?
 
 - [ ] add logging/tracing

@@ -34,14 +34,6 @@
       };
 
       packages.tsh = pkgs.callPackage ./default.nix {};
-
-      # packages.rustEnv = pkgs.buildEnv {
-      #   name = "tsh-dev";
-      #   paths = with pkgs; [ rustToolchain ] ++ [
-      #     rust-analyzer
-      #     gcc
-      #   ];
-      # };
     }
   );
 }
