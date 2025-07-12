@@ -22,19 +22,26 @@
       rustDevPkgs = [ rustToolchain ] ++ (with pkgs; [ rust-analyzer ]);
     in {
       devShells.default = pkgs.mkShell {
-        packages = with pkgs; rustDevPkgs;
+        packages = with pkgs; rustDevPkgs ++ [
+          entr
+          just
+          curl
+          litecli
+          bacon
+          gcc
+        ];
         RUST_SRC_PATH = "${rustToolchain}/lib/rustlib/src/rust/library";
       };
 
       packages.tsh = pkgs.callPackage ./default.nix {};
 
-      packages.rustEnv = pkgs.buildEnv {
-        name = "tsh-dev";
-        paths = with pkgs; [ rustToolchain ] ++ [
-          rust-analyzer
-          gcc
-        ];
-      };
+      # packages.rustEnv = pkgs.buildEnv {
+      #   name = "tsh-dev";
+      #   paths = with pkgs; [ rustToolchain ] ++ [
+      #     rust-analyzer
+      #     gcc
+      #   ];
+      # };
     }
   );
 }
