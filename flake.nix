@@ -15,20 +15,18 @@
   }: flake-utils.lib.eachDefaultSystem (system: let
       pkgs = import nixpkgs {
         inherit system;
-        overlays = [rust-overlay.overlays.default];
+        overlays = [ rust-overlay.overlays.default ];
         config.allowUnfree = false;
       };
       rustToolchain = pkgs.rust-bin.fromRustupToolchainFile ./rust-toolchain.toml;
-      rustDevPkgs = [ rustToolchain ] ++ (with pkgs; [ rust-analyzer ]);
     in {
       devShells.default = pkgs.mkShell {
-        packages = with pkgs; rustDevPkgs ++ [
-          entr
+        packages = with pkgs; [
+          rustToolchain
+          rust-analyzer
           just
-          curl
           litecli
           bacon
-          gcc
         ];
         RUST_SRC_PATH = "${rustToolchain}/lib/rustlib/src/rust/library";
       };
