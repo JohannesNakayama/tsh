@@ -19,19 +19,15 @@
         config.allowUnfree = false;
       };
       rustToolchain = pkgs.rust-bin.fromRustupToolchainFile ./rust-toolchain.toml;
+      rustDevTools = with pkgs; [ rustToolchain rust-analyzer bacon ];
+      cargoAnalysisTools = with pkgs; [ cargo-license cargo-deny cargo-info ];
+      generalDevTools = with pkgs; [ just litecli ];
     in {
       devShells.default = pkgs.mkShell {
-        packages = with pkgs; [
-          rustToolchain
-          rust-analyzer
-          just
-          litecli
-          bacon
-        ];
+        packages = rustDevTools ++ cargoAnalysisTools ++ generalDevTools;
         RUST_SRC_PATH = "${rustToolchain}/lib/rustlib/src/rust/library";
       };
-
-      packages.tsh = pkgs.callPackage ./default.nix {};
+      packages.tsh = pkgs.callPackage ./default.nix { };
     }
   );
 }
