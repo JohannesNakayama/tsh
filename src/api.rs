@@ -2,7 +2,7 @@ use std::error::Error;
 
 use crate::{
     combine_zettel_contents,
-    db::{find_zettels_by_embedding, get_db, store_zettel},
+    db::{find_n_recent_leaf_zettels, find_zettels_by_embedding, get_db, store_zettel},
     llm::LlmClient,
     model::Zettel,
     open_and_edit_neovim_buffer,
@@ -61,6 +61,15 @@ pub async fn find_zettels(
     let mut conn = get_db(db_path).await?;
     let tx = conn.transaction()?;
     let zettels: Vec<Zettel> = find_zettels_by_embedding(&tx, query_embedding).await?;
+    tx.commit()?;
+
+    Ok(zettels)
+}
+
+pub async fn get_n_recent_zettels(db_path: &str, n: i64) -> Result<Vec<Zettel>, Box<dyn Error>> {
+    let mut conn = get_db(db_path).await?;
+    let tx = conn.transaction()?;
+    let zettels: Vec<Zettel> = find_n_recent_leaf_zettels(&tx, n).await?;
     tx.commit()?;
 
     Ok(zettels)

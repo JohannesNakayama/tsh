@@ -12,6 +12,7 @@ use strum::{Display, EnumIter, FromRepr, IntoEnumIterator};
 use crate::tui::{
     app::{ActiveScreenType, AppCommand, LlmConfig, Screen},
     iterate::IterateZettelScreen,
+    recent::RecentScreen,
 };
 
 pub struct MainMenuScreen {
@@ -27,6 +28,8 @@ enum Action {
     AddZettel,
     #[strum(to_string = "Iterate")]
     IterateZettel,
+    #[strum(to_string = "Recent")]
+    RecentZettel,
 }
 
 impl Action {
@@ -96,6 +99,12 @@ impl Screen for MainMenuScreen {
                     Action::IterateZettel => {
                         Ok(Some(AppCommand::SwitchScreen(ActiveScreenType::Iterate(
                             IterateZettelScreen::new(self.db_path.clone(), self.llm_config.clone()),
+                        ))))
+                    }
+                    Action::RecentZettel => {
+                        Ok(Some(AppCommand::SwitchScreen(ActiveScreenType::Recent(
+                            RecentScreen::new(self.db_path.clone(), self.llm_config.clone())
+                                .await?,
                         ))))
                     }
                 },

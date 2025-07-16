@@ -8,7 +8,11 @@ use tsh::{
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn Error>> {
     let args: Vec<String> = std::env::args().collect();
-    let maybe_config_path: Option<String> = if args.len() == 2 { Some(args[1].clone()) } else { None };
+    let maybe_config_path: Option<String> = if args.len() == 2 {
+        Some(args[1].clone())
+    } else {
+        None
+    };
 
     let config = load_config(maybe_config_path)?;
     let llm_config = LlmConfig::from(&config);

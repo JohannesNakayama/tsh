@@ -106,6 +106,41 @@ pub async fn find_zettels_by_embedding(
     Ok(thoughts)
 }
 
+pub async fn find_n_recent_leaf_zettels(
+    tx: &Transaction<'_>,
+    n: i64,
+) -> Result<Vec<Zettel>, rusqlite::Error> {
+    let mut stmt = tx.prepare(
+        "
+        with leaf_nodes as (
+            select distinct descendant_id
+            from zettel_lineage
+            where descendant_id not in (
+                select distinct ancestor_id
+                from zettel_lineage
+            )
+        )
+        select id, content, created_at
+        from zettel z
+        inner join leaf_nodes ln on z.id = ln.descendant_id
+        order by created_at desc
+        limit ?
+        ",
+    )?;
+
+    let n_recent_zettels: Vec<Zettel> = stmt
+        .query_map([n], |row| {
+            Ok(Zettel {
+                id: row.get(0)?,
+                content: row.get(1)?,
+                created_at: row.get(2)?,
+            })
+        })?
+        .collect::<Result<Vec<Zettel>, rusqlite::Error>>()?;
+
+    Ok(n_recent_zettels)
+}
+
 pub async fn store_article(
     tx: &Transaction<'_>,
     zettel_id: i64,

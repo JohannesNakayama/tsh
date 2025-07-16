@@ -5,7 +5,6 @@ use ratatui::{
     crossterm::event::{KeyCode, KeyEvent},
     layout::{Constraint, Direction, Layout},
     style::{Color, Modifier, Style},
-    text::Line,
     widgets::{Block, BorderType, Borders, List, ListItem, Paragraph},
 };
 
@@ -222,20 +221,5 @@ impl Screen for IterateZettelScreen {
         f.render_widget(search_box, layout[0]);
         f.render_widget(search_results_list, inner_layout[0]);
         f.render_widget(preview, inner_layout[1]);
-    }
-}
-
-impl From<&Zettel> for ListItem<'_> {
-    fn from(zettel: &Zettel) -> Self {
-        let lines = vec![
-            Line::styled(
-                format!("{}: {}", zettel.id, zettel.get_datetime_string()),
-                Style::default()
-                    .add_modifier(Modifier::ITALIC)
-                    .fg(Color::LightBlue),
-            ),
-            Line::styled(zettel.get_shim(), Style::default()),
-        ];
-        ListItem::new(lines)
     }
 }

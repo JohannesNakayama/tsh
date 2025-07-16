@@ -8,12 +8,13 @@ use crate::{
     AppConfig,
     api::add_zettel,
     model::Zettel,
-    tui::{iterate::IterateZettelScreen, main_menu::MainMenuScreen},
+    tui::{iterate::IterateZettelScreen, main_menu::MainMenuScreen, recent::RecentScreen},
 };
 
 pub enum ActiveScreenType {
     Main(MainMenuScreen),
     Iterate(IterateZettelScreen),
+    Recent(RecentScreen),
 }
 
 pub enum AppCommand {
@@ -81,6 +82,10 @@ impl App {
                             let maybe_action = screen.handle_key_event(key).await?;
                             Ok(maybe_action)
                         }
+                        ActiveScreenType::Recent(screen) => {
+                            let maybe_action = screen.handle_key_event(key).await?;
+                            Ok(maybe_action)
+                        }
                     };
                 }
             }
@@ -97,6 +102,9 @@ impl App {
             ActiveScreenType::Iterate(screen) => {
                 screen.draw(frame);
             }
+            ActiveScreenType::Recent(screen) => {
+                screen.draw(frame);
+            }
         }
     }
 
@@ -111,6 +119,9 @@ impl App {
                 }
                 ActiveScreenType::Iterate(screen) => {
                     self.current_screen = ActiveScreenType::Iterate(screen);
+                }
+                ActiveScreenType::Recent(screen) => {
+                    self.current_screen = ActiveScreenType::Recent(screen);
                 }
             },
             _ => {}

@@ -13,9 +13,10 @@ pub mod llm;
 pub mod model;
 pub mod tui {
     pub mod app;
-    pub mod develop;
+    pub mod common;
     pub mod iterate;
     pub mod main_menu;
+    pub mod recent;
 }
 pub mod api;
 
@@ -34,7 +35,7 @@ pub fn load_config(cfg_path: Option<String>) -> Result<AppConfig, Box<dyn Error>
             let home_dir = std::env::var("HOME")?;
             let path = format!("{}/.config/tsh/config.toml", home_dir);
             path
-        },
+        }
     };
     fs::read_to_string(path)
         .map_err(|e| e.into())
@@ -96,7 +97,11 @@ pub fn combine_zettel_contents(zettels: Vec<Zettel>) -> String {
         .join("\n\n")
 }
 
-pub async fn promote_zettel(zettel: Zettel, title: &str, db_path: &str) -> Result<Article, rusqlite::Error> {
+pub async fn promote_zettel(
+    zettel: Zettel,
+    title: &str,
+    db_path: &str,
+) -> Result<Article, rusqlite::Error> {
     let mut conn = get_db(db_path).await?;
     let tx = conn.transaction()?;
     let article = store_article(&tx, zettel.id, title, &zettel.content).await?;
