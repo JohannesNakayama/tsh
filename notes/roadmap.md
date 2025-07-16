@@ -1,5 +1,10 @@
 ## Next Steps
 
+- [ ] tags and releases
+    - [ ] build in CI
+    - [ ] github release
+    - [ ] publish with tags
+
 - [ ] use flake-parts or manual setup in flake instead of flake-utils?
 
 - [ ] check impurity in nix package definition -> can it be removed?
@@ -9,9 +14,6 @@
 - [ ] get timestamps as u128 instead of i64
 
 - [ ] add logging/tracing
-
-- [ ] new develop zettel workflow:
-    - [ ] entrypoint: most recent (result list for selection)
 
 - [ ] promote zettels to articles
     - [ ] implement functionality in tui
