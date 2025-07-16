@@ -113,17 +113,19 @@ pub async fn find_n_recent_leaf_zettels(
     let mut stmt = tx.prepare(
         "
         with leaf_nodes as (
-            select distinct descendant_id
-            from zettel_lineage
-            where descendant_id not in (
-                select distinct ancestor_id
-                from zettel_lineage
+            select node_id
+            from zettel_edge
+            where node_id not in (
+                select parent_id
+                from zettel_edge
+                where parent_id is not null
             )
+            group by node_id
         )
-        select id, content, created_at
+        select z.id, z.content, z.created_at
         from zettel z
-        inner join leaf_nodes ln on z.id = ln.descendant_id
-        order by created_at desc
+        inner join leaf_nodes ln on z.id = ln.node_id
+        order by z.created_at desc
         limit ?
         ",
     )?;
