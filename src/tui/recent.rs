@@ -5,7 +5,6 @@ use ratatui::{
     crossterm::event::{KeyCode, KeyEvent},
     layout::{Constraint, Direction, Layout},
     style::{Color, Modifier, Style},
-    text::Line,
     widgets::{Block, BorderType, Borders, List, ListItem, Paragraph},
 };
 
@@ -34,7 +33,7 @@ enum RecentScreenMessage {
 
 impl RecentScreen {
     pub async fn new(db_path: String, llm_config: LlmConfig) -> Result<Self, Box<dyn Error>> {
-        let n_recent_zettels = get_n_recent_zettels(&db_path, 10).await?;
+        let n_recent_zettels = get_n_recent_zettels(&db_path, 100).await?;
         Ok(Self {
             recent_zettels: n_recent_zettels.clone(),
             selected_zettel: if n_recent_zettels.is_empty() {
@@ -110,18 +109,10 @@ impl Screen for RecentScreen {
     }
 
     fn draw(&mut self, f: &mut Frame) {
-        let layout = Layout::new(
-            Direction::Vertical,
-            [Constraint::Length(3), Constraint::Min(0)],
-        )
-        .split(f.area());
-
-        let inner_layout = Layout::default()
+        let layout = Layout::default()
             .direction(Direction::Horizontal)
             .constraints([Constraint::Percentage(50), Constraint::Percentage(50)])
-            .split(layout[1]);
-
-        let screen_title = Line::styled("Recent Zettels", Style::default());
+            .split(f.area());
 
         let recent_zettels: Vec<ListItem> = self
             .recent_zettels
@@ -146,7 +137,7 @@ impl Screen for RecentScreen {
             Block::default()
                 .borders(Borders::ALL)
                 .border_type(BorderType::Rounded)
-                .title("Search Results"),
+                .title("Recent Zettels"),
         );
 
         let preview_paragraph = match self.selected_zettel {
@@ -164,8 +155,7 @@ impl Screen for RecentScreen {
                 .title("Preview"),
         );
 
-        f.render_widget(screen_title, layout[0]);
-        f.render_widget(search_results_list, inner_layout[0]);
-        f.render_widget(preview, inner_layout[1]);
+        f.render_widget(search_results_list, layout[0]);
+        f.render_widget(preview, layout[1]);
     }
 }
