@@ -66,7 +66,7 @@ impl MainMenuScreen {
         match key.code {
             KeyCode::Down => Some(MainMenuMessage::MoveDown),
             KeyCode::Up => Some(MainMenuMessage::MoveUp),
-            KeyCode::Char('q') => Some(MainMenuMessage::QuitApp),
+            KeyCode::Char('q') | KeyCode::Esc => Some(MainMenuMessage::QuitApp),
             KeyCode::Enter => Some(MainMenuMessage::DoAction(self.selected_action)),
             _ => None,
         }
