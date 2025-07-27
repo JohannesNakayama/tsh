@@ -1,5 +1,12 @@
 ## Next Steps
 
+- [ ] add articles directly
+
+- [ ] mix-in workflow
+    - [ ] choose a (leaf node?) zettel
+    - [ ] fill a list of zettels to mix-in (all root nodes?)
+    - [ ] put everything in a buffer, save with parent_ids after editing
+
 - [ ] tags and releases
     - [ ] build in CI
     - [ ] github release
