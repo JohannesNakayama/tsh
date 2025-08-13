@@ -39,3 +39,10 @@ pub struct Article {
     pub content: String,
     pub created_at: i64, // TODO: look into how to make this u128
 }
+
+#[derive(Debug, Clone)]
+pub struct ZettelTag {
+    pub zettel_id: i64,
+    pub tag: String,
+    pub created_at: i64, // TODO: look into how to make this u128
+}

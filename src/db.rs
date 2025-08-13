@@ -6,7 +6,7 @@ use sqlite_vec::sqlite3_vec_init;
 use std::sync::LazyLock;
 use zerocopy::IntoBytes;
 
-use crate::model::{Article, Zettel};
+use crate::model::{Article, Zettel, ZettelTag};
 
 // TODO: move migrations dir to canonical location or specify in config.toml
 static MIGRATIONS_DIR: Dir = include_dir!("$CARGO_MANIFEST_DIR/migrations");
@@ -167,4 +167,27 @@ pub async fn store_article(
             })
         })?;
     Ok(article)
+}
+
+pub async fn add_tag_if_not_exists(
+    tx: &Transaction<'_>,
+    zettel_id: i64,
+    tag: &str,
+) -> Result<ZettelTag, rusqlite::Error> {
+    let zettel_tag: ZettelTag = tx
+        .prepare(
+            "
+            insert into zettel_tag (zettel_id, tag)
+            values (?, ?)
+            returning zettel_id, tag, created_at
+            ",
+        )?
+        .query_one((zettel_id, tag), |row| {
+            Ok(ZettelTag {
+                zettel_id: row.get(0)?,
+                tag: row.get(1)?,
+                created_at: row.get(2)?,
+            })
+        })?;
+    Ok(zettel_tag)
 }
