@@ -152,7 +152,7 @@ pub async fn store_article(
     let article: Article = tx
         .prepare(
             "
-            insert into article (zettel_id , title , content)
+            insert into article (zettel_id, title, content)
             values (?, ?, ?)
             returning id, zettel_id, title, content, created_at
             ",

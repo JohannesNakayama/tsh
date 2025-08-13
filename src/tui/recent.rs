@@ -5,7 +5,7 @@ use ratatui::{
     crossterm::event::{KeyCode, KeyEvent},
     layout::{Constraint, Direction, Layout},
     style::{Color, Modifier, Style},
-    widgets::{Block, BorderType, Borders, List, ListItem, Paragraph},
+    widgets::{Block, BorderType, Borders, List, ListItem, ListState, Paragraph},
 };
 
 use crate::{
@@ -22,6 +22,7 @@ pub struct RecentScreen {
     selected_zettel: Option<usize>,
     db_path: String,
     llm_config: LlmConfig,
+    list_state: ListState,
 }
 
 enum RecentScreenMessage {
@@ -43,6 +44,7 @@ impl RecentScreen {
             },
             db_path,
             llm_config,
+            list_state: ListState::default(),
         })
     }
 
@@ -68,12 +70,14 @@ impl RecentScreen {
             RecentScreenMessage::ResultListMoveUp => {
                 if let Some(idx) = self.selected_zettel {
                     self.selected_zettel = Some(idx.saturating_sub(1));
+                    self.list_state.select(self.selected_zettel);
                 }
             }
             RecentScreenMessage::ResultListMoveDown => {
                 if let Some(idx) = self.selected_zettel {
                     if idx + 1 < self.recent_zettels.len() {
                         self.selected_zettel = Some(idx + 1);
+                        self.list_state.select(self.selected_zettel);
                     }
                 }
             }
@@ -155,7 +159,7 @@ impl Screen for RecentScreen {
                 .title("Preview"),
         );
 
-        f.render_widget(search_results_list, layout[0]);
+        f.render_stateful_widget(search_results_list, layout[0], &mut self.list_state);
         f.render_widget(preview, layout[1]);
     }
 }
