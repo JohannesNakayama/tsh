@@ -1,5 +1,13 @@
 ## Next Steps
 
+- [ ] add tagging
+    - [x] tag zettels for organization
+    - [ ] popup on recent screen to add/remove tags to/from zettels
+        - [ ] simple input field which displays tag while typing
+    - [ ] tag search screen
+
+- [ ] lists?
+
 - [ ] add articles directly
 
 - [ ] mix-in workflow
@@ -26,10 +34,6 @@
     - [ ] implement functionality in tui
 
 - [ ] function for remixing only root ideas (otherwise the same idea could end up in a thought twice)
-
-- [ ] add tagging
-    - [ ] automatic tagging with ollama model
-    - [ ] manual tagging for organization
 
 - [ ] store thought on save of vim buffer
     - [ ] keep buffer open, then save again on close
