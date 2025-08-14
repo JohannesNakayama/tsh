@@ -3,9 +3,9 @@ use std::error::Error;
 use ratatui::{
     Frame,
     crossterm::event::{KeyCode, KeyEvent},
-    layout::{Constraint, Direction, Layout},
+    layout::{Constraint, Direction, Flex, Layout, Rect},
     style::{Color, Modifier, Style},
-    widgets::{Block, BorderType, Borders, List, ListItem, ListState, Paragraph},
+    widgets::{Block, BorderType, Borders, Clear, List, ListItem, ListState, Paragraph},
 };
 
 use crate::{
@@ -23,9 +23,12 @@ pub struct RecentScreen {
     db_path: String,
     llm_config: LlmConfig,
     list_state: ListState,
+    show_tag_popup: bool,
 }
 
 enum RecentScreenMessage {
+    ShowTagPopup,
+    HideTagPopup,
     BackToMainMenu,
     ResultListMoveUp,
     ResultListMoveDown,
@@ -45,12 +48,27 @@ impl RecentScreen {
             db_path,
             llm_config,
             list_state: ListState::default(),
+            show_tag_popup: false,
         })
     }
 
     fn handle_key_event_internal(&mut self, key: KeyEvent) -> Option<RecentScreenMessage> {
         match key.code {
-            KeyCode::Char('q') | KeyCode::Esc => Some(RecentScreenMessage::BackToMainMenu),
+            KeyCode::Char('q') => Some(RecentScreenMessage::BackToMainMenu),
+            KeyCode::Esc => {
+                if self.show_tag_popup {
+                    Some(RecentScreenMessage::HideTagPopup)
+                } else {
+                    None
+                }
+            }
+            KeyCode::Char('t') => {
+                if let Some(_) = self.selected_zettel {
+                    Some(RecentScreenMessage::ShowTagPopup)
+                } else {
+                    None
+                }
+            }
             KeyCode::Up => Some(RecentScreenMessage::ResultListMoveUp),
             KeyCode::Down => Some(RecentScreenMessage::ResultListMoveDown),
             KeyCode::Enter => {
@@ -67,6 +85,14 @@ impl RecentScreen {
 
     async fn update(&mut self, message: RecentScreenMessage) -> Result<(), Box<dyn Error>> {
         match message {
+            RecentScreenMessage::ShowTagPopup => {
+                if let Some(_) = self.selected_zettel {
+                    self.show_tag_popup = true;
+                }
+            }
+            RecentScreenMessage::HideTagPopup => {
+                self.show_tag_popup = false;
+            }
             RecentScreenMessage::ResultListMoveUp => {
                 if let Some(idx) = self.selected_zettel {
                     self.selected_zettel = Some(idx.saturating_sub(1));
@@ -161,5 +187,28 @@ impl Screen for RecentScreen {
 
         f.render_stateful_widget(search_results_list, layout[0], &mut self.list_state);
         f.render_widget(preview, layout[1]);
+
+        if self.show_tag_popup {
+            let block = Block::bordered()
+                .border_type(BorderType::Double)
+                .title("Tag")
+                .style(
+                    Style::default()
+                        .add_modifier(Modifier::BOLD)
+                        .fg(Color::LightGreen),
+                );
+            let area = popup_area(f.area(), 60, 40);
+            f.render_widget(Clear, area);
+            f.render_widget(block, area);
+        }
     }
+}
+
+// https://ratatui.rs/examples/apps/popup/
+fn popup_area(area: Rect, percent_x: u16, percent_y: u16) -> Rect {
+    let vertical = Layout::vertical([Constraint::Percentage(percent_y)]).flex(Flex::Center);
+    let horizontal = Layout::horizontal([Constraint::Percentage(percent_x)]).flex(Flex::Center);
+    let [area] = vertical.areas(area);
+    let [area] = horizontal.areas(area);
+    area
 }
