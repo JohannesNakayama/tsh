@@ -179,6 +179,8 @@ pub async fn add_tag_if_not_exists(
             "
             insert into zettel_tag (zettel_id, tag)
             values (?, ?)
+            on conflict(zettel_id, tag) do update
+            set tag = excluded.tag
             returning zettel_id, tag, created_at
             ",
         )?
