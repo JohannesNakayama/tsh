@@ -17,18 +17,34 @@ use crate::{
     },
 };
 
+enum View {
+    ListView,
+    TagView,
+}
+
+enum TagInputMode {
+    Insert,
+    Normal,
+}
+
 pub struct RecentScreen {
     recent_zettels: Vec<Zettel>,
     selected_zettel: Option<usize>,
     db_path: String,
     llm_config: LlmConfig,
     list_state: ListState,
-    show_tag_popup: bool,
+    view: View,
+    tag_input_mode: TagInputMode,
+    tag_input: String,
 }
 
 enum RecentScreenMessage {
-    ShowTagPopup,
-    HideTagPopup,
+    SwitchToTagView,
+    SwitchToListView,
+    EnterTagInputInsertMode,
+    ExitTagInputInsertMode,
+    InsertTagInputChar(char),
+    DeleteTagInputChar,
     BackToMainMenu,
     ResultListMoveUp,
     ResultListMoveDown,
@@ -48,50 +64,74 @@ impl RecentScreen {
             db_path,
             llm_config,
             list_state: ListState::default(),
-            show_tag_popup: false,
+            view: View::ListView,
+            tag_input_mode: TagInputMode::Normal,
+            tag_input: String::new(),
         })
     }
 
     fn handle_key_event_internal(&mut self, key: KeyEvent) -> Option<RecentScreenMessage> {
-        match key.code {
-            KeyCode::Char('q') => Some(RecentScreenMessage::BackToMainMenu),
-            KeyCode::Esc => {
-                if self.show_tag_popup {
-                    Some(RecentScreenMessage::HideTagPopup)
-                } else {
-                    None
+        match self.view {
+            View::ListView => match key.code {
+                KeyCode::Char('q') => Some(RecentScreenMessage::BackToMainMenu),
+                KeyCode::Char('t') => Some(RecentScreenMessage::SwitchToTagView),
+                KeyCode::Up => Some(RecentScreenMessage::ResultListMoveUp),
+                KeyCode::Down => Some(RecentScreenMessage::ResultListMoveDown),
+                KeyCode::Enter => {
+                    if let Some(idx) = self.selected_zettel {
+                        let zettel = self.recent_zettels[idx].clone();
+                        Some(RecentScreenMessage::IterateZettel(zettel))
+                    } else {
+                        None
+                    }
                 }
-            }
-            KeyCode::Char('t') => {
-                if let Some(_) = self.selected_zettel {
-                    Some(RecentScreenMessage::ShowTagPopup)
-                } else {
-                    None
-                }
-            }
-            KeyCode::Up => Some(RecentScreenMessage::ResultListMoveUp),
-            KeyCode::Down => Some(RecentScreenMessage::ResultListMoveDown),
-            KeyCode::Enter => {
-                if let Some(idx) = self.selected_zettel {
-                    let zettel = self.recent_zettels[idx].clone();
-                    Some(RecentScreenMessage::IterateZettel(zettel))
-                } else {
-                    None
-                }
-            }
-            _ => None,
+                _ => None,
+            },
+            View::TagView => match self.tag_input_mode {
+                TagInputMode::Normal => match key.code {
+                    KeyCode::Char('q') => Some(RecentScreenMessage::SwitchToListView),
+                    KeyCode::Char('i') => Some(RecentScreenMessage::EnterTagInputInsertMode),
+                    _ => None,
+                },
+                TagInputMode::Insert => match key.code {
+                    KeyCode::Char(c) => Some(RecentScreenMessage::InsertTagInputChar(c)),
+                    KeyCode::Backspace => Some(RecentScreenMessage::DeleteTagInputChar),
+                    KeyCode::Esc => Some(RecentScreenMessage::ExitTagInputInsertMode),
+                    _ => None,
+                },
+            },
         }
     }
 
     async fn update(&mut self, message: RecentScreenMessage) -> Result<(), Box<dyn Error>> {
         match message {
-            RecentScreenMessage::ShowTagPopup => {
-                if let Some(_) = self.selected_zettel {
-                    self.show_tag_popup = true;
+            RecentScreenMessage::SwitchToTagView => {
+                self.tag_input.clear();
+                self.tag_input_mode = TagInputMode::Normal;
+                self.view = View::TagView;
+            }
+            RecentScreenMessage::SwitchToListView => {
+                self.tag_input.clear();
+                self.tag_input_mode = TagInputMode::Normal;
+                self.view = View::ListView;
+            }
+            RecentScreenMessage::EnterTagInputInsertMode => {
+                if let View::TagView = self.view {
+                    self.tag_input.clear();
+                    self.tag_input_mode = TagInputMode::Insert;
                 }
             }
-            RecentScreenMessage::HideTagPopup => {
-                self.show_tag_popup = false;
+            RecentScreenMessage::ExitTagInputInsertMode => {
+                if let View::TagView = self.view {
+                    self.tag_input.clear();
+                    self.tag_input_mode = TagInputMode::Normal;
+                }
+            }
+            RecentScreenMessage::InsertTagInputChar(c) => {
+                self.tag_input.push(c);
+            }
+            RecentScreenMessage::DeleteTagInputChar => {
+                self.tag_input.pop();
             }
             RecentScreenMessage::ResultListMoveUp => {
                 if let Some(idx) = self.selected_zettel {
@@ -188,18 +228,33 @@ impl Screen for RecentScreen {
         f.render_stateful_widget(search_results_list, layout[0], &mut self.list_state);
         f.render_widget(preview, layout[1]);
 
-        if self.show_tag_popup {
+        if let View::TagView = self.view {
             let block = Block::bordered()
                 .border_type(BorderType::Double)
-                .title("Tag")
-                .style(
-                    Style::default()
-                        .add_modifier(Modifier::BOLD)
-                        .fg(Color::LightGreen),
-                );
+                .border_style(Style::default().add_modifier(Modifier::BOLD))
+                .title("Tag");
+
             let area = popup_area(f.area(), 60, 40);
+
+            let inner_area = block.inner(area);
+
+            let popup_layout = Layout::default()
+                .direction(Direction::Vertical)
+                .constraints([Constraint::Length(1), Constraint::Min(0)])
+                .split(inner_area);
+
+            let input_field =
+                Paragraph::new(format!("> {}", self.tag_input)).style(match self.tag_input_mode {
+                    TagInputMode::Insert => Style::default()
+                        .add_modifier(Modifier::BOLD)
+                        .bg(Color::DarkGray)
+                        .fg(Color::LightGreen),
+                    TagInputMode::Normal => Style::default().bg(Color::DarkGray),
+                });
+
             f.render_widget(Clear, area);
             f.render_widget(block, area);
+            f.render_widget(input_field, popup_layout[0]);
         }
     }
 }
