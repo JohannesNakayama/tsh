@@ -9,7 +9,7 @@ use ratatui::{
 };
 
 use crate::{
-    api::get_n_recent_zettels,
+    api::{add_tag_to_zettel, get_n_recent_zettels},
     model::Zettel,
     tui::{
         app::{ActiveScreenType, AppCommand, LlmConfig, Screen},
@@ -45,6 +45,7 @@ enum RecentScreenMessage {
     ExitTagInputInsertMode,
     InsertTagInputChar(char),
     DeleteTagInputChar,
+    SubmitTag,
     BackToMainMenu,
     ResultListMoveUp,
     ResultListMoveDown,
@@ -96,6 +97,7 @@ impl RecentScreen {
                 TagInputMode::Insert => match key.code {
                     KeyCode::Char(c) => Some(RecentScreenMessage::InsertTagInputChar(c)),
                     KeyCode::Backspace => Some(RecentScreenMessage::DeleteTagInputChar),
+                    KeyCode::Enter => Some(RecentScreenMessage::SubmitTag),
                     KeyCode::Esc => Some(RecentScreenMessage::ExitTagInputInsertMode),
                     _ => None,
                 },
@@ -132,6 +134,14 @@ impl RecentScreen {
             }
             RecentScreenMessage::DeleteTagInputChar => {
                 self.tag_input.pop();
+            }
+            RecentScreenMessage::SubmitTag => {
+                if let Some(idx) = self.selected_zettel {
+                    let zettel_id = self.recent_zettels[idx].id;
+                    add_tag_to_zettel(&self.db_path, zettel_id, self.tag_input.clone()).await?;
+                    self.tag_input = String::new();
+                    self.tag_input_mode = TagInputMode::Normal;
+                }
             }
             RecentScreenMessage::ResultListMoveUp => {
                 if let Some(idx) = self.selected_zettel {

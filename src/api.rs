@@ -2,7 +2,10 @@ use std::error::Error;
 
 use crate::{
     combine_zettel_contents,
-    db::{find_n_recent_leaf_zettels, find_zettels_by_embedding, get_db, store_zettel},
+    db::{
+        add_tag_if_not_exists, find_n_recent_leaf_zettels, find_zettels_by_embedding, get_db,
+        store_zettel,
+    },
     llm::LlmClient,
     model::Zettel,
     open_and_edit_neovim_buffer,
@@ -73,4 +76,16 @@ pub async fn get_n_recent_zettels(db_path: &str, n: i64) -> Result<Vec<Zettel>, 
     tx.commit()?;
 
     Ok(zettels)
+}
+
+pub async fn add_tag_to_zettel(
+    db_path: &str,
+    zettel_id: i64,
+    tag: String,
+) -> Result<(), Box<dyn Error>> {
+    let mut conn = get_db(db_path).await?;
+    let tx = conn.transaction()?;
+    add_tag_if_not_exists(&tx, zettel_id, &tag).await?;
+    tx.commit()?;
+    Ok(())
 }
