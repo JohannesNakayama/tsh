@@ -9,8 +9,8 @@ use ratatui::{
 };
 
 use crate::{
-    api::{add_tag_to_zettel, get_n_recent_zettels},
-    model::Zettel,
+    api::{add_tag_to_zettel, get_n_recent_zettels, get_tags},
+    model::{Zettel, ZettelTag},
     tui::{
         app::{ActiveScreenType, AppCommand, LlmConfig, Screen},
         main_menu::MainMenuScreen,
@@ -30,6 +30,7 @@ enum TagInputMode {
 pub struct RecentScreen {
     recent_zettels: Vec<Zettel>,
     selected_zettel: Option<usize>,
+    selected_zettel_tags: Vec<ZettelTag>,
     db_path: String,
     llm_config: LlmConfig,
     list_state: ListState,
@@ -62,6 +63,7 @@ impl RecentScreen {
             } else {
                 Some(0)
             },
+            selected_zettel_tags: vec![],
             db_path,
             llm_config,
             list_state: ListState::default(),
@@ -108,9 +110,13 @@ impl RecentScreen {
     async fn update(&mut self, message: RecentScreenMessage) -> Result<(), Box<dyn Error>> {
         match message {
             RecentScreenMessage::SwitchToTagView => {
-                self.tag_input.clear();
-                self.tag_input_mode = TagInputMode::Normal;
-                self.view = View::TagView;
+                if let Some(idx) = self.selected_zettel {
+                    let zettel_id = self.recent_zettels[idx].id;
+                    self.selected_zettel_tags = get_tags(&self.db_path, zettel_id).await?;
+                    self.tag_input.clear();
+                    self.tag_input_mode = TagInputMode::Normal;
+                    self.view = View::TagView;
+                }
             }
             RecentScreenMessage::SwitchToListView => {
                 self.tag_input.clear();
@@ -139,6 +145,7 @@ impl RecentScreen {
                 if let Some(idx) = self.selected_zettel {
                     let zettel_id = self.recent_zettels[idx].id;
                     add_tag_to_zettel(&self.db_path, zettel_id, self.tag_input.clone()).await?;
+                    self.selected_zettel_tags = get_tags(&self.db_path, zettel_id).await?;
                     self.tag_input = String::new();
                     self.tag_input_mode = TagInputMode::Normal;
                 }
@@ -239,6 +246,14 @@ impl Screen for RecentScreen {
         f.render_widget(preview, layout[1]);
 
         if let View::TagView = self.view {
+            let tag_list_items: Vec<ListItem> = self
+                .selected_zettel_tags
+                .iter()
+                .map(|zettel_tag| ListItem::from(zettel_tag))
+                .collect();
+
+            let tag_list = List::new(tag_list_items);
+
             let block = Block::bordered()
                 .border_type(BorderType::Double)
                 .border_style(Style::default().add_modifier(Modifier::BOLD))
@@ -265,6 +280,7 @@ impl Screen for RecentScreen {
             f.render_widget(Clear, area);
             f.render_widget(block, area);
             f.render_widget(input_field, popup_layout[0]);
+            f.render_widget(tag_list, popup_layout[1]);
         }
     }
 }

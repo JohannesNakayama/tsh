@@ -193,3 +193,28 @@ pub async fn add_tag_if_not_exists(
         })?;
     Ok(zettel_tag)
 }
+
+pub async fn get_tags_for_zettel(
+    tx: &Transaction<'_>,
+    zettel_id: i64,
+) -> Result<Vec<ZettelTag>, rusqlite::Error> {
+    let mut stmt = tx.prepare(
+        "
+        select zettel_id, tag, created_at
+        from zettel_tag
+        where zettel_id = ?
+        ",
+    )?;
+
+    let tags: Vec<ZettelTag> = stmt
+        .query_map([zettel_id], |row| {
+            Ok(ZettelTag {
+                zettel_id: row.get(0)?,
+                tag: row.get(1)?,
+                created_at: row.get(2)?,
+            })
+        })?
+        .collect::<Result<Vec<ZettelTag>, rusqlite::Error>>()?;
+
+    Ok(tags)
+}

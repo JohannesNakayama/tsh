@@ -4,7 +4,7 @@ use ratatui::{
     widgets::ListItem,
 };
 
-use crate::model::Zettel;
+use crate::model::{Zettel, ZettelTag};
 
 impl From<&Zettel> for ListItem<'_> {
     fn from(zettel: &Zettel) -> Self {
@@ -18,5 +18,15 @@ impl From<&Zettel> for ListItem<'_> {
             Line::styled(zettel.get_shim(), Style::default()),
         ];
         ListItem::new(lines)
+    }
+}
+
+impl From<&ZettelTag> for ListItem<'_> {
+    fn from(tag: &ZettelTag) -> Self {
+        let line = Line::styled(
+            format!("#{}", tag.tag),
+            Style::default().add_modifier(Modifier::ITALIC),
+        );
+        ListItem::new(line)
     }
 }

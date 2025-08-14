@@ -4,10 +4,10 @@ use crate::{
     combine_zettel_contents,
     db::{
         add_tag_if_not_exists, find_n_recent_leaf_zettels, find_zettels_by_embedding, get_db,
-        store_zettel,
+        get_tags_for_zettel, store_zettel,
     },
     llm::LlmClient,
-    model::Zettel,
+    model::{Zettel, ZettelTag},
     open_and_edit_neovim_buffer,
     tui::app::LlmConfig,
 };
@@ -88,4 +88,12 @@ pub async fn add_tag_to_zettel(
     add_tag_if_not_exists(&tx, zettel_id, &tag).await?;
     tx.commit()?;
     Ok(())
+}
+
+pub async fn get_tags(db_path: &str, zettel_id: i64) -> Result<Vec<ZettelTag>, Box<dyn Error>> {
+    let mut conn = get_db(db_path).await?;
+    let tx = conn.transaction()?;
+    let tags = get_tags_for_zettel(&tx, zettel_id).await?;
+    tx.commit()?;
+    Ok(tags)
 }
