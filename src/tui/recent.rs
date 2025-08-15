@@ -37,6 +37,7 @@ pub struct RecentScreen {
     view: View,
     tag_input_mode: TagInputMode,
     tag_input: String,
+    tag_selected_idx: Option<usize>,
 }
 
 enum RecentScreenMessage {
@@ -47,6 +48,8 @@ enum RecentScreenMessage {
     InsertTagInputChar(char),
     DeleteTagInputChar,
     SubmitTag,
+    TagListMoveUp,
+    TagListMoveDown,
     BackToMainMenu,
     ResultListMoveUp,
     ResultListMoveDown,
@@ -70,6 +73,7 @@ impl RecentScreen {
             view: View::ListView,
             tag_input_mode: TagInputMode::Normal,
             tag_input: String::new(),
+            tag_selected_idx: None,
         })
     }
 
@@ -94,6 +98,8 @@ impl RecentScreen {
                 TagInputMode::Normal => match key.code {
                     KeyCode::Char('q') => Some(RecentScreenMessage::SwitchToListView),
                     KeyCode::Char('i') => Some(RecentScreenMessage::EnterTagInputInsertMode),
+                    KeyCode::Up => Some(RecentScreenMessage::TagListMoveUp),
+                    KeyCode::Down => Some(RecentScreenMessage::TagListMoveDown),
                     _ => None,
                 },
                 TagInputMode::Insert => match key.code {
@@ -115,6 +121,11 @@ impl RecentScreen {
                     self.selected_zettel_tags = get_tags(&self.db_path, zettel_id).await?;
                     self.tag_input.clear();
                     self.tag_input_mode = TagInputMode::Normal;
+                    if let None = self.tag_selected_idx {
+                        if self.selected_zettel_tags.len() > 0 {
+                            self.tag_selected_idx = Some(0);
+                        }
+                    }
                     self.view = View::TagView;
                 }
             }
@@ -125,12 +136,18 @@ impl RecentScreen {
             }
             RecentScreenMessage::EnterTagInputInsertMode => {
                 if let View::TagView = self.view {
+                    self.tag_selected_idx = None;
                     self.tag_input.clear();
                     self.tag_input_mode = TagInputMode::Insert;
                 }
             }
             RecentScreenMessage::ExitTagInputInsertMode => {
                 if let View::TagView = self.view {
+                    if let None = self.tag_selected_idx {
+                        if self.selected_zettel_tags.len() > 0 {
+                            self.tag_selected_idx = Some(0);
+                        }
+                    }
                     self.tag_input.clear();
                     self.tag_input_mode = TagInputMode::Normal;
                 }
@@ -148,6 +165,18 @@ impl RecentScreen {
                     self.selected_zettel_tags = get_tags(&self.db_path, zettel_id).await?;
                     self.tag_input = String::new();
                     self.tag_input_mode = TagInputMode::Normal;
+                }
+            }
+            RecentScreenMessage::TagListMoveUp => {
+                if let Some(idx) = self.tag_selected_idx {
+                    self.tag_selected_idx = Some(idx.saturating_sub(1));
+                }
+            }
+            RecentScreenMessage::TagListMoveDown => {
+                if let Some(idx) = self.tag_selected_idx {
+                    if idx + 1 < self.selected_zettel_tags.len() {
+                        self.tag_selected_idx = Some(idx + 1);
+                    }
                 }
             }
             RecentScreenMessage::ResultListMoveUp => {
@@ -249,7 +278,20 @@ impl Screen for RecentScreen {
             let tag_list_items: Vec<ListItem> = self
                 .selected_zettel_tags
                 .iter()
-                .map(|zettel_tag| ListItem::from(zettel_tag))
+                .enumerate()
+                .map(|(i, zettel_tag)| {
+                    let mut item = ListItem::from(zettel_tag);
+                    if let Some(idx) = self.tag_selected_idx {
+                        if i == idx {
+                            item = item.style(
+                                Style::default()
+                                    .fg(Color::LightGreen)
+                                    .add_modifier(Modifier::BOLD),
+                            );
+                        }
+                    }
+                    item
+                })
                 .collect();
 
             let tag_list = List::new(tag_list_items);
