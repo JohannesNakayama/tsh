@@ -9,7 +9,7 @@ use ratatui::{
 };
 
 use crate::{
-    api::{add_tag_to_zettel, get_n_recent_zettels, get_tags},
+    api::{add_tag_to_zettel, delete_tag_from_zettel, get_n_recent_zettels, get_tags},
     model::{Zettel, ZettelTag},
     tui::{
         app::{ActiveScreenType, AppCommand, LlmConfig, Screen},
@@ -48,6 +48,7 @@ enum RecentScreenMessage {
     InsertTagInputChar(char),
     DeleteTagInputChar,
     SubmitTag,
+    DeleteTag,
     TagListMoveUp,
     TagListMoveDown,
     BackToMainMenu,
@@ -100,6 +101,7 @@ impl RecentScreen {
                     KeyCode::Char('i') => Some(RecentScreenMessage::EnterTagInputInsertMode),
                     KeyCode::Up => Some(RecentScreenMessage::TagListMoveUp),
                     KeyCode::Down => Some(RecentScreenMessage::TagListMoveDown),
+                    KeyCode::Char('d') => Some(RecentScreenMessage::DeleteTag),
                     _ => None,
                 },
                 TagInputMode::Insert => match key.code {
@@ -165,6 +167,25 @@ impl RecentScreen {
                     self.selected_zettel_tags = get_tags(&self.db_path, zettel_id).await?;
                     self.tag_input = String::new();
                     self.tag_input_mode = TagInputMode::Normal;
+                    if self.selected_zettel_tags.len() > 0 {
+                        self.tag_selected_idx = Some(0);
+                    }
+                }
+            }
+            RecentScreenMessage::DeleteTag => {
+                if let Some(tag_idx) = self.tag_selected_idx {
+                    let selected_tag = self.selected_zettel_tags[tag_idx].clone();
+                    delete_tag_from_zettel(
+                        &self.db_path,
+                        selected_tag.zettel_id,
+                        &selected_tag.tag,
+                    )
+                    .await?;
+                    self.selected_zettel_tags =
+                        get_tags(&self.db_path, selected_tag.zettel_id).await?;
+                    if self.selected_zettel_tags.len() > 0 {
+                        self.tag_selected_idx = Some(0);
+                    }
                 }
             }
             RecentScreenMessage::TagListMoveUp => {

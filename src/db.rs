@@ -1,6 +1,6 @@
 use include_dir::{Dir, include_dir};
 use rusqlite::ffi::sqlite3_auto_extension;
-use rusqlite::{Connection, Transaction};
+use rusqlite::{Connection, Transaction, params};
 use rusqlite_migration::Migrations;
 use sqlite_vec::sqlite3_vec_init;
 use std::sync::LazyLock;
@@ -217,4 +217,22 @@ pub async fn get_tags_for_zettel(
         .collect::<Result<Vec<ZettelTag>, rusqlite::Error>>()?;
 
     Ok(tags)
+}
+
+pub async fn delete_tag_for_zettel_if_exists(
+    tx: &Transaction<'_>,
+    zettel_id: i64,
+    tag: &str,
+) -> Result<(), rusqlite::Error> {
+    let mut stmt = tx.prepare(
+        "
+        delete from zettel_tag
+        where zettel_id = ?1
+        and tag = ?2
+        ",
+    )?;
+
+    stmt.execute(params![zettel_id, tag])?;
+
+    Ok(())
 }
