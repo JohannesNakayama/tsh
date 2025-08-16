@@ -1,6 +1,6 @@
 use include_dir::{Dir, include_dir};
 use rusqlite::ffi::sqlite3_auto_extension;
-use rusqlite::{Connection, Transaction, params};
+use rusqlite::{Connection, Transaction, params, params_from_iter};
 use rusqlite_migration::Migrations;
 use sqlite_vec::sqlite3_vec_init;
 use std::sync::LazyLock;
@@ -235,4 +235,38 @@ pub async fn delete_tag_for_zettel_if_exists(
     stmt.execute(params![zettel_id, tag])?;
 
     Ok(())
+}
+
+pub async fn find_zettels_by_tags(
+    tx: &Transaction<'_>,
+    tags: Vec<&str>,
+) -> Result<Vec<Zettel>, rusqlite::Error> {
+    let placeholders = tags.iter().map(|_| "?").collect::<Vec<_>>().join(", ");
+    let sql_string = format!(
+        "
+        select
+              z.id
+            , z.content
+            , z.created_at
+        from zettel z
+        join zettel_tag zt
+        on z.id = zt.zettel_id
+        where zt.tag in ({})
+        ",
+        placeholders,
+    );
+
+    let mut stmt = tx.prepare(&sql_string)?;
+
+    let zettels = stmt
+        .query_map(params_from_iter(tags.iter()), |row| {
+            Ok(Zettel {
+                id: row.get(0)?,
+                content: row.get(1)?,
+                created_at: row.get(2)?,
+            })
+        })?
+        .collect::<Result<Vec<Zettel>, rusqlite::Error>>()?;
+
+    Ok(zettels)
 }
