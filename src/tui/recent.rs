@@ -20,6 +20,7 @@ use crate::{
 enum View {
     ListView,
     TagView,
+    TagSearchView,
 }
 
 enum TagInputMode {
@@ -43,6 +44,7 @@ pub struct RecentScreen {
 enum RecentScreenMessage {
     SwitchToTagView,
     SwitchToListView,
+    SwitchToTagSearchView,
     EnterTagInputInsertMode,
     ExitTagInputInsertMode,
     InsertTagInputChar(char),
@@ -83,6 +85,7 @@ impl RecentScreen {
             View::ListView => match key.code {
                 KeyCode::Char('q') => Some(RecentScreenMessage::BackToMainMenu),
                 KeyCode::Char('t') => Some(RecentScreenMessage::SwitchToTagView),
+                KeyCode::Char('s') => Some(RecentScreenMessage::SwitchToTagSearchView),
                 KeyCode::Up => Some(RecentScreenMessage::ResultListMoveUp),
                 KeyCode::Down => Some(RecentScreenMessage::ResultListMoveDown),
                 KeyCode::Enter => {
@@ -112,6 +115,11 @@ impl RecentScreen {
                     _ => None,
                 },
             },
+            View::TagSearchView => match key.code {
+                KeyCode::Char('q') => Some(RecentScreenMessage::SwitchToListView),
+                // ... TODO
+                _ => None,
+            },
         }
     }
 
@@ -135,6 +143,9 @@ impl RecentScreen {
                 self.tag_input.clear();
                 self.tag_input_mode = TagInputMode::Normal;
                 self.view = View::ListView;
+            }
+            RecentScreenMessage::SwitchToTagSearchView => {
+                self.view = View::TagSearchView;
             }
             RecentScreenMessage::EnterTagInputInsertMode => {
                 if let View::TagView = self.view {
@@ -344,6 +355,27 @@ impl Screen for RecentScreen {
             f.render_widget(block, area);
             f.render_widget(input_field, popup_layout[0]);
             f.render_widget(tag_list, popup_layout[1]);
+        }
+
+        if let View::TagSearchView = self.view {
+            let block = Block::bordered()
+                .border_type(BorderType::Double)
+                .border_style(Style::default().add_modifier(Modifier::BOLD))
+                .title("Search");
+
+            let area = popup_area(f.area(), 60, 40);
+
+            // let inner_area = block.inner(area);
+
+            // let popup_layout = Layout::default()
+            //     .direction(Direction::Vertical)
+            //     .constraints([Constraint::Length(1), Constraint::Min(0)])
+            //     .split(inner_area);
+
+            f.render_widget(Clear, area);
+            f.render_widget(block, area);
+            // f.render_widget(input_field, popup_layout[0]);
+            // f.render_widget(tag_list, popup_layout[1]);
         }
     }
 }
