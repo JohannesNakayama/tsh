@@ -270,3 +270,21 @@ pub async fn find_zettels_by_tags(
 
     Ok(zettels)
 }
+
+pub async fn find_tags_by_search_string(
+    tx: &Transaction<'_>,
+    search_string: &str,
+) -> Result<Vec<String>, rusqlite::Error> {
+    let search_pattern = format!("{}%", search_string);
+    let mut stmt = tx.prepare(
+        "
+        select tag
+        from distinct_tags
+        where tag like ?
+        ",
+    )?;
+    let tags: Vec<String> = stmt
+        .query_map([search_pattern], |row| Ok(row.get(0)?))?
+        .collect::<Result<Vec<String>, rusqlite::Error>>()?;
+    Ok(tags)
+}

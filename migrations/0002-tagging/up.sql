@@ -5,4 +5,7 @@ create table if not exists zettel_tag (
   , unique(zettel_id, tag)
 );
 
-
+create view if not exists distinct_tags as
+select distinct tag
+from zettel_tag
+order by tag;

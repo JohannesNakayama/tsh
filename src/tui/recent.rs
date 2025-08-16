@@ -393,7 +393,7 @@ impl Screen for RecentScreen {
             let block = Block::bordered()
                 .border_type(BorderType::Double)
                 .border_style(Style::default().add_modifier(Modifier::BOLD))
-                .title("Search");
+                .title("Tag Search");
 
             let area = popup_area(f.area(), 60, 40);
 
