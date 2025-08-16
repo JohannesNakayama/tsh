@@ -29,16 +29,25 @@ enum TagInputMode {
 }
 
 pub struct RecentScreen {
-    recent_zettels: Vec<Zettel>,
-    selected_zettel: Option<usize>,
-    selected_zettel_tags: Vec<ZettelTag>,
     db_path: String,
     llm_config: LlmConfig,
-    list_state: ListState,
     view: View,
-    tag_input_mode: TagInputMode,
-    tag_input: String,
-    tag_selected_idx: Option<usize>,
+    list_view_state: ListViewState,
+    tag_view_state: Option<TagViewState>,
+}
+
+pub struct ListViewState {
+    zettels: Vec<Zettel>,
+    selected_idx: Option<usize>,
+    display_state: ListState,
+}
+
+pub struct TagViewState {
+    zettel_id: i64,
+    tags: Vec<ZettelTag>,
+    selected_idx: Option<usize>,
+    input_mode: TagInputMode,
+    input: String,
 }
 
 enum RecentScreenMessage {
@@ -63,20 +72,19 @@ impl RecentScreen {
     pub async fn new(db_path: String, llm_config: LlmConfig) -> Result<Self, Box<dyn Error>> {
         let n_recent_zettels = get_n_recent_zettels(&db_path, 100).await?;
         Ok(Self {
-            recent_zettels: n_recent_zettels.clone(),
-            selected_zettel: if n_recent_zettels.is_empty() {
-                None
-            } else {
-                Some(0)
-            },
-            selected_zettel_tags: vec![],
             db_path,
             llm_config,
-            list_state: ListState::default(),
             view: View::ListView,
-            tag_input_mode: TagInputMode::Normal,
-            tag_input: String::new(),
-            tag_selected_idx: None,
+            list_view_state: ListViewState {
+                zettels: n_recent_zettels.clone(),
+                selected_idx: if n_recent_zettels.is_empty() {
+                    None
+                } else {
+                    Some(0)
+                },
+                display_state: ListState::default(),
+            },
+            tag_view_state: None,
         })
     }
 
@@ -89,8 +97,8 @@ impl RecentScreen {
                 KeyCode::Up => Some(RecentScreenMessage::ResultListMoveUp),
                 KeyCode::Down => Some(RecentScreenMessage::ResultListMoveDown),
                 KeyCode::Enter => {
-                    if let Some(idx) = self.selected_zettel {
-                        let zettel = self.recent_zettels[idx].clone();
+                    if let Some(idx) = self.list_view_state.selected_idx {
+                        let zettel = self.list_view_state.zettels[idx].clone();
                         Some(RecentScreenMessage::IterateZettel(zettel))
                     } else {
                         None
@@ -98,22 +106,25 @@ impl RecentScreen {
                 }
                 _ => None,
             },
-            View::TagView => match self.tag_input_mode {
-                TagInputMode::Normal => match key.code {
-                    KeyCode::Char('q') => Some(RecentScreenMessage::SwitchToListView),
-                    KeyCode::Char('i') => Some(RecentScreenMessage::EnterTagInputInsertMode),
-                    KeyCode::Up => Some(RecentScreenMessage::TagListMoveUp),
-                    KeyCode::Down => Some(RecentScreenMessage::TagListMoveDown),
-                    KeyCode::Char('d') => Some(RecentScreenMessage::DeleteTag),
-                    _ => None,
+            View::TagView => match &self.tag_view_state {
+                Some(state) => match state.input_mode {
+                    TagInputMode::Normal => match key.code {
+                        KeyCode::Char('q') => Some(RecentScreenMessage::SwitchToListView),
+                        KeyCode::Char('i') => Some(RecentScreenMessage::EnterTagInputInsertMode),
+                        KeyCode::Up => Some(RecentScreenMessage::TagListMoveUp),
+                        KeyCode::Down => Some(RecentScreenMessage::TagListMoveDown),
+                        KeyCode::Char('d') => Some(RecentScreenMessage::DeleteTag),
+                        _ => None,
+                    },
+                    TagInputMode::Insert => match key.code {
+                        KeyCode::Char(c) => Some(RecentScreenMessage::InsertTagInputChar(c)),
+                        KeyCode::Backspace => Some(RecentScreenMessage::DeleteTagInputChar),
+                        KeyCode::Enter => Some(RecentScreenMessage::SubmitTag),
+                        KeyCode::Esc => Some(RecentScreenMessage::ExitTagInputInsertMode),
+                        _ => None,
+                    },
                 },
-                TagInputMode::Insert => match key.code {
-                    KeyCode::Char(c) => Some(RecentScreenMessage::InsertTagInputChar(c)),
-                    KeyCode::Backspace => Some(RecentScreenMessage::DeleteTagInputChar),
-                    KeyCode::Enter => Some(RecentScreenMessage::SubmitTag),
-                    KeyCode::Esc => Some(RecentScreenMessage::ExitTagInputInsertMode),
-                    _ => None,
-                },
+                None => None,
             },
             View::TagSearchView => match key.code {
                 KeyCode::Char('q') => Some(RecentScreenMessage::SwitchToListView),
@@ -126,22 +137,22 @@ impl RecentScreen {
     async fn update(&mut self, message: RecentScreenMessage) -> Result<(), Box<dyn Error>> {
         match message {
             RecentScreenMessage::SwitchToTagView => {
-                if let Some(idx) = self.selected_zettel {
-                    let zettel_id = self.recent_zettels[idx].id;
-                    self.selected_zettel_tags = get_tags(&self.db_path, zettel_id).await?;
-                    self.tag_input.clear();
-                    self.tag_input_mode = TagInputMode::Normal;
-                    if let None = self.tag_selected_idx {
-                        if self.selected_zettel_tags.len() > 0 {
-                            self.tag_selected_idx = Some(0);
-                        }
-                    }
+                if let Some(idx) = self.list_view_state.selected_idx {
                     self.view = View::TagView;
+                    let zettel_id = self.list_view_state.zettels[idx].id;
+                    let tags = get_tags(&self.db_path, zettel_id).await?;
+                    let selected_idx = if tags.len() > 0 { Some(0) } else { None };
+                    self.tag_view_state = Some(TagViewState {
+                        zettel_id,
+                        tags,
+                        input: String::new(),
+                        input_mode: TagInputMode::Normal,
+                        selected_idx,
+                    });
                 }
             }
             RecentScreenMessage::SwitchToListView => {
-                self.tag_input.clear();
-                self.tag_input_mode = TagInputMode::Normal;
+                self.tag_view_state = None;
                 self.view = View::ListView;
             }
             RecentScreenMessage::SwitchToTagSearchView => {
@@ -149,79 +160,93 @@ impl RecentScreen {
             }
             RecentScreenMessage::EnterTagInputInsertMode => {
                 if let View::TagView = self.view {
-                    self.tag_selected_idx = None;
-                    self.tag_input.clear();
-                    self.tag_input_mode = TagInputMode::Insert;
+                    if let Some(state) = &mut self.tag_view_state {
+                        state.selected_idx = None;
+                        state.input.clear();
+                        state.input_mode = TagInputMode::Insert;
+                    }
                 }
             }
             RecentScreenMessage::ExitTagInputInsertMode => {
-                if let View::TagView = self.view {
-                    if let None = self.tag_selected_idx {
-                        if self.selected_zettel_tags.len() > 0 {
-                            self.tag_selected_idx = Some(0);
-                        }
+                if let Some(state) = &mut self.tag_view_state {
+                    if state.tags.len() > 0 {
+                        state.selected_idx = Some(0);
                     }
-                    self.tag_input.clear();
-                    self.tag_input_mode = TagInputMode::Normal;
+                    state.input.clear();
+                    state.input_mode = TagInputMode::Normal;
                 }
             }
             RecentScreenMessage::InsertTagInputChar(c) => {
-                self.tag_input.push(c);
+                if let Some(state) = &mut self.tag_view_state {
+                    state.input.push(c);
+                }
             }
             RecentScreenMessage::DeleteTagInputChar => {
-                self.tag_input.pop();
+                if let Some(state) = &mut self.tag_view_state {
+                    state.input.pop();
+                }
             }
             RecentScreenMessage::SubmitTag => {
-                if let Some(idx) = self.selected_zettel {
-                    let zettel_id = self.recent_zettels[idx].id;
-                    add_tag_to_zettel(&self.db_path, zettel_id, self.tag_input.clone()).await?;
-                    self.selected_zettel_tags = get_tags(&self.db_path, zettel_id).await?;
-                    self.tag_input = String::new();
-                    self.tag_input_mode = TagInputMode::Normal;
-                    if self.selected_zettel_tags.len() > 0 {
-                        self.tag_selected_idx = Some(0);
+                if let Some(state) = &mut self.tag_view_state {
+                    add_tag_to_zettel(&self.db_path, state.zettel_id, state.input.clone()).await?;
+                    state.tags = get_tags(&self.db_path, state.zettel_id).await?;
+                    state.input = String::new();
+                    state.input_mode = TagInputMode::Normal;
+                    if state.tags.len() > 0 {
+                        state.selected_idx = Some(0);
                     }
                 }
             }
             RecentScreenMessage::DeleteTag => {
-                if let Some(tag_idx) = self.tag_selected_idx {
-                    let selected_tag = self.selected_zettel_tags[tag_idx].clone();
-                    delete_tag_from_zettel(
-                        &self.db_path,
-                        selected_tag.zettel_id,
-                        &selected_tag.tag,
-                    )
-                    .await?;
-                    self.selected_zettel_tags =
-                        get_tags(&self.db_path, selected_tag.zettel_id).await?;
-                    if self.selected_zettel_tags.len() > 0 {
-                        self.tag_selected_idx = Some(0);
+                if let Some(state) = &mut self.tag_view_state {
+                    if let Some(idx) = state.selected_idx {
+                        let selected_tag = state.tags[idx].clone();
+                        delete_tag_from_zettel(
+                            &self.db_path,
+                            selected_tag.zettel_id,
+                            &selected_tag.tag,
+                        )
+                        .await?;
+                        state.tags = get_tags(&self.db_path, selected_tag.zettel_id).await?;
+                        if state.tags.len() > 0 {
+                            state.selected_idx = Some(0);
+                        } else {
+                            state.selected_idx = None;
+                        }
                     }
                 }
             }
             RecentScreenMessage::TagListMoveUp => {
-                if let Some(idx) = self.tag_selected_idx {
-                    self.tag_selected_idx = Some(idx.saturating_sub(1));
+                if let Some(state) = &mut self.tag_view_state {
+                    if let Some(idx) = state.selected_idx {
+                        state.selected_idx = Some(idx.saturating_sub(1));
+                    }
                 }
             }
             RecentScreenMessage::TagListMoveDown => {
-                if let Some(idx) = self.tag_selected_idx {
-                    if idx + 1 < self.selected_zettel_tags.len() {
-                        self.tag_selected_idx = Some(idx + 1);
+                if let Some(state) = &mut self.tag_view_state {
+                    if let Some(idx) = state.selected_idx {
+                        if idx + 1 < state.tags.len() {
+                            state.selected_idx = Some(idx + 1);
+                        }
                     }
                 }
             }
             RecentScreenMessage::ResultListMoveUp => {
-                if let Some(idx) = self.selected_zettel {
-                    self.selected_zettel = Some(idx.saturating_sub(1));
-                    self.list_state.select(self.selected_zettel);
+                if let Some(idx) = self.list_view_state.selected_idx {
+                    self.list_view_state.selected_idx = Some(idx.saturating_sub(1));
+                    self.list_view_state
+                        .display_state
+                        .select(self.list_view_state.selected_idx);
                 }
             }
             RecentScreenMessage::ResultListMoveDown => {
-                if let Some(idx) = self.selected_zettel {
-                    if idx + 1 < self.recent_zettels.len() {
-                        self.selected_zettel = Some(idx + 1);
-                        self.list_state.select(self.selected_zettel);
+                if let Some(idx) = self.list_view_state.selected_idx {
+                    if idx + 1 < self.list_view_state.zettels.len() {
+                        self.list_view_state.selected_idx = Some(idx + 1);
+                        self.list_view_state
+                            .display_state
+                            .select(self.list_view_state.selected_idx);
                     }
                 }
             }
@@ -263,12 +288,13 @@ impl Screen for RecentScreen {
             .split(f.area());
 
         let recent_zettels: Vec<ListItem> = self
-            .recent_zettels
+            .list_view_state
+            .zettels
             .iter()
             .enumerate()
             .map(|(i, zettel)| {
                 let mut item = ListItem::from(zettel);
-                if let Some(idx) = self.selected_zettel {
+                if let Some(idx) = self.list_view_state.selected_idx {
                     if i == idx {
                         item = item.style(
                             Style::default()
@@ -288,9 +314,9 @@ impl Screen for RecentScreen {
                 .title("Recent Zettels"),
         );
 
-        let preview_paragraph = match self.selected_zettel {
+        let preview_paragraph = match self.list_view_state.selected_idx {
             Some(idx) => {
-                let selected_zettel = &self.recent_zettels[idx];
+                let selected_zettel = &self.list_view_state.zettels[idx];
                 Paragraph::new(selected_zettel.content.to_string())
             }
             None => Paragraph::default(),
@@ -303,58 +329,64 @@ impl Screen for RecentScreen {
                 .title("Preview"),
         );
 
-        f.render_stateful_widget(search_results_list, layout[0], &mut self.list_state);
+        f.render_stateful_widget(
+            search_results_list,
+            layout[0],
+            &mut self.list_view_state.display_state,
+        );
         f.render_widget(preview, layout[1]);
 
         if let View::TagView = self.view {
-            let tag_list_items: Vec<ListItem> = self
-                .selected_zettel_tags
-                .iter()
-                .enumerate()
-                .map(|(i, zettel_tag)| {
-                    let mut item = ListItem::from(zettel_tag);
-                    if let Some(idx) = self.tag_selected_idx {
-                        if i == idx {
-                            item = item.style(
-                                Style::default()
-                                    .fg(Color::LightGreen)
-                                    .add_modifier(Modifier::BOLD),
-                            );
+            if let Some(state) = &mut self.tag_view_state {
+                let tag_list_items: Vec<ListItem> = state
+                    .tags
+                    .iter()
+                    .enumerate()
+                    .map(|(i, zettel_tag)| {
+                        let mut item = ListItem::from(zettel_tag);
+                        if let Some(idx) = state.selected_idx {
+                            if i == idx {
+                                item = item.style(
+                                    Style::default()
+                                        .fg(Color::LightGreen)
+                                        .add_modifier(Modifier::BOLD),
+                                );
+                            }
                         }
-                    }
-                    item
-                })
-                .collect();
+                        item
+                    })
+                    .collect();
 
-            let tag_list = List::new(tag_list_items);
+                let tag_list = List::new(tag_list_items);
 
-            let block = Block::bordered()
-                .border_type(BorderType::Double)
-                .border_style(Style::default().add_modifier(Modifier::BOLD))
-                .title("Tag");
+                let block = Block::bordered()
+                    .border_type(BorderType::Double)
+                    .border_style(Style::default().add_modifier(Modifier::BOLD))
+                    .title("Tag");
 
-            let area = popup_area(f.area(), 60, 40);
+                let area = popup_area(f.area(), 60, 40);
 
-            let inner_area = block.inner(area);
+                let inner_area = block.inner(area);
 
-            let popup_layout = Layout::default()
-                .direction(Direction::Vertical)
-                .constraints([Constraint::Length(1), Constraint::Min(0)])
-                .split(inner_area);
+                let popup_layout = Layout::default()
+                    .direction(Direction::Vertical)
+                    .constraints([Constraint::Length(1), Constraint::Min(0)])
+                    .split(inner_area);
 
-            let input_field =
-                Paragraph::new(format!("> {}", self.tag_input)).style(match self.tag_input_mode {
-                    TagInputMode::Insert => Style::default()
-                        .add_modifier(Modifier::BOLD)
-                        .bg(Color::DarkGray)
-                        .fg(Color::LightGreen),
-                    TagInputMode::Normal => Style::default().bg(Color::DarkGray),
-                });
+                let input_field =
+                    Paragraph::new(format!("> {}", state.input)).style(match state.input_mode {
+                        TagInputMode::Insert => Style::default()
+                            .add_modifier(Modifier::BOLD)
+                            .bg(Color::DarkGray)
+                            .fg(Color::LightGreen),
+                        TagInputMode::Normal => Style::default().bg(Color::DarkGray),
+                    });
 
-            f.render_widget(Clear, area);
-            f.render_widget(block, area);
-            f.render_widget(input_field, popup_layout[0]);
-            f.render_widget(tag_list, popup_layout[1]);
+                f.render_widget(Clear, area);
+                f.render_widget(block, area);
+                f.render_widget(input_field, popup_layout[0]);
+                f.render_widget(tag_list, popup_layout[1]);
+            }
         }
 
         if let View::TagSearchView = self.view {
