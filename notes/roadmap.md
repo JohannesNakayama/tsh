@@ -1,10 +1,6 @@
 ## Next Steps
 
-- [ ] add tagging
-    - [x] tag zettels for organization
-    - [ ] popup on recent screen to add/remove tags to/from zettels
-        - [ ] simple input field which displays tag while typing
-    - [ ] tag search screen
+- [ ] tag search screen
 
 - [ ] lists?
 
