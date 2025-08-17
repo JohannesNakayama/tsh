@@ -30,3 +30,8 @@ impl From<&ZettelTag> for ListItem<'_> {
         ListItem::new(line)
     }
 }
+
+pub enum InputMode {
+    Insert,
+    Normal,
+}

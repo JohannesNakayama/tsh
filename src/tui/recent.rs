@@ -13,6 +13,7 @@ use crate::{
     model::{Zettel, ZettelTag},
     tui::{
         app::{ActiveScreenType, AppCommand, LlmConfig, Screen},
+        common::InputMode,
         main_menu::MainMenuScreen,
     },
 };
@@ -23,17 +24,13 @@ enum View {
     TagSearchView,
 }
 
-enum TagInputMode {
-    Insert,
-    Normal,
-}
-
 pub struct RecentScreen {
     db_path: String,
     llm_config: LlmConfig,
     view: View,
     list_view_state: ListViewState,
     tag_view_state: Option<TagViewState>,
+    tag_search_view_state: Option<TagSearchViewState>,
 }
 
 pub struct ListViewState {
@@ -46,7 +43,12 @@ pub struct TagViewState {
     zettel_id: i64,
     tags: Vec<ZettelTag>,
     selected_idx: Option<usize>,
-    input_mode: TagInputMode,
+    input_mode: InputMode,
+    input: String,
+}
+
+pub struct TagSearchViewState {
+    input_mode: InputMode,
     input: String,
 }
 
@@ -85,6 +87,7 @@ impl RecentScreen {
                 display_state: ListState::default(),
             },
             tag_view_state: None,
+            tag_search_view_state: None,
         })
     }
 
@@ -108,7 +111,7 @@ impl RecentScreen {
             },
             View::TagView => match &self.tag_view_state {
                 Some(state) => match state.input_mode {
-                    TagInputMode::Normal => match key.code {
+                    InputMode::Normal => match key.code {
                         KeyCode::Char('q') => Some(RecentScreenMessage::SwitchToListView),
                         KeyCode::Char('i') => Some(RecentScreenMessage::EnterTagInputInsertMode),
                         KeyCode::Up => Some(RecentScreenMessage::TagListMoveUp),
@@ -116,7 +119,7 @@ impl RecentScreen {
                         KeyCode::Char('d') => Some(RecentScreenMessage::DeleteTag),
                         _ => None,
                     },
-                    TagInputMode::Insert => match key.code {
+                    InputMode::Insert => match key.code {
                         KeyCode::Char(c) => Some(RecentScreenMessage::InsertTagInputChar(c)),
                         KeyCode::Backspace => Some(RecentScreenMessage::DeleteTagInputChar),
                         KeyCode::Enter => Some(RecentScreenMessage::SubmitTag),
@@ -146,16 +149,22 @@ impl RecentScreen {
                         zettel_id,
                         tags,
                         input: String::new(),
-                        input_mode: TagInputMode::Normal,
+                        input_mode: InputMode::Normal,
                         selected_idx,
                     });
                 }
             }
             RecentScreenMessage::SwitchToListView => {
                 self.tag_view_state = None;
+                self.tag_search_view_state = None;
                 self.view = View::ListView;
             }
             RecentScreenMessage::SwitchToTagSearchView => {
+                self.tag_view_state = None;
+                self.tag_search_view_state = Some(TagSearchViewState {
+                    input_mode: InputMode::Normal,
+                    input: String::new(),
+                });
                 self.view = View::TagSearchView;
             }
             RecentScreenMessage::EnterTagInputInsertMode => {
@@ -163,7 +172,7 @@ impl RecentScreen {
                     if let Some(state) = &mut self.tag_view_state {
                         state.selected_idx = None;
                         state.input.clear();
-                        state.input_mode = TagInputMode::Insert;
+                        state.input_mode = InputMode::Insert;
                     }
                 }
             }
@@ -173,7 +182,7 @@ impl RecentScreen {
                         state.selected_idx = Some(0);
                     }
                     state.input.clear();
-                    state.input_mode = TagInputMode::Normal;
+                    state.input_mode = InputMode::Normal;
                 }
             }
             RecentScreenMessage::InsertTagInputChar(c) => {
@@ -191,7 +200,7 @@ impl RecentScreen {
                     add_tag_to_zettel(&self.db_path, state.zettel_id, state.input.clone()).await?;
                     state.tags = get_tags(&self.db_path, state.zettel_id).await?;
                     state.input = String::new();
-                    state.input_mode = TagInputMode::Normal;
+                    state.input_mode = InputMode::Normal;
                     if state.tags.len() > 0 {
                         state.selected_idx = Some(0);
                     }
@@ -375,11 +384,11 @@ impl Screen for RecentScreen {
 
                 let input_field =
                     Paragraph::new(format!("> {}", state.input)).style(match state.input_mode {
-                        TagInputMode::Insert => Style::default()
+                        InputMode::Insert => Style::default()
                             .add_modifier(Modifier::BOLD)
                             .bg(Color::DarkGray)
                             .fg(Color::LightGreen),
-                        TagInputMode::Normal => Style::default().bg(Color::DarkGray),
+                        InputMode::Normal => Style::default().bg(Color::DarkGray),
                     });
 
                 f.render_widget(Clear, area);
@@ -390,24 +399,35 @@ impl Screen for RecentScreen {
         }
 
         if let View::TagSearchView = self.view {
-            let block = Block::bordered()
-                .border_type(BorderType::Double)
-                .border_style(Style::default().add_modifier(Modifier::BOLD))
-                .title("Tag Search");
+            if let Some(state) = &mut self.tag_search_view_state {
+                let block = Block::bordered()
+                    .border_type(BorderType::Double)
+                    .border_style(Style::default().add_modifier(Modifier::BOLD))
+                    .title("Tag Search");
 
-            let area = popup_area(f.area(), 60, 40);
+                let area = popup_area(f.area(), 60, 40);
 
-            // let inner_area = block.inner(area);
+                let input_field =
+                    Paragraph::new(format!("> {}", state.input)).style(match state.input_mode {
+                        InputMode::Insert => Style::default()
+                            .add_modifier(Modifier::BOLD)
+                            .bg(Color::DarkGray)
+                            .fg(Color::LightGreen),
+                        InputMode::Normal => Style::default().bg(Color::DarkGray),
+                    });
 
-            // let popup_layout = Layout::default()
-            //     .direction(Direction::Vertical)
-            //     .constraints([Constraint::Length(1), Constraint::Min(0)])
-            //     .split(inner_area);
+                let inner_area = block.inner(area);
 
-            f.render_widget(Clear, area);
-            f.render_widget(block, area);
-            // f.render_widget(input_field, popup_layout[0]);
-            // f.render_widget(tag_list, popup_layout[1]);
+                let popup_layout = Layout::default()
+                    .direction(Direction::Vertical)
+                    .constraints([Constraint::Length(1), Constraint::Min(0)])
+                    .split(inner_area);
+
+                f.render_widget(Clear, area);
+                f.render_widget(block, area);
+                f.render_widget(input_field, popup_layout[0]);
+                // f.render_widget(tag_list, popup_layout[1]);
+            }
         }
     }
 }
