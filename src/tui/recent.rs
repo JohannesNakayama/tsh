@@ -53,9 +53,7 @@ struct TagSearchViewState {
 }
 
 enum RecentScreenMessage {
-    SwitchToTagView,
-    SwitchToListView,
-    SwitchToTagSearchView,
+    SwitchView(View),
     EnterTagInputInsertMode,
     ExitTagInputInsertMode,
     InsertTagInputChar(char),
@@ -99,8 +97,8 @@ impl RecentScreen {
         match self.view {
             View::ListView => match key.code {
                 KeyCode::Char('q') => Some(RecentScreenMessage::BackToMainMenu),
-                KeyCode::Char('t') => Some(RecentScreenMessage::SwitchToTagView),
-                KeyCode::Char('s') => Some(RecentScreenMessage::SwitchToTagSearchView),
+                KeyCode::Char('t') => Some(RecentScreenMessage::SwitchView(View::TagView)),
+                KeyCode::Char('s') => Some(RecentScreenMessage::SwitchView(View::TagSearchView)),
                 KeyCode::Up => Some(RecentScreenMessage::ResultListMoveUp),
                 KeyCode::Down => Some(RecentScreenMessage::ResultListMoveDown),
                 KeyCode::Enter => {
@@ -116,7 +114,7 @@ impl RecentScreen {
             View::TagView => match &self.tag_view_state {
                 Some(state) => match state.input_mode {
                     InputMode::Normal => match key.code {
-                        KeyCode::Char('q') => Some(RecentScreenMessage::SwitchToListView),
+                        KeyCode::Char('q') => Some(RecentScreenMessage::SwitchView(View::ListView)),
                         KeyCode::Char('i') => Some(RecentScreenMessage::EnterTagInputInsertMode),
                         KeyCode::Up => Some(RecentScreenMessage::TagListMoveUp),
                         KeyCode::Down => Some(RecentScreenMessage::TagListMoveDown),
@@ -134,7 +132,7 @@ impl RecentScreen {
                 None => None,
             },
             View::TagSearchView => match key.code {
-                KeyCode::Char('q') => Some(RecentScreenMessage::SwitchToListView),
+                KeyCode::Char('q') => Some(RecentScreenMessage::SwitchView(View::ListView)),
                 KeyCode::Char('i') => Some(RecentScreenMessage::EnterTagSearchInsertMode),
                 KeyCode::Esc => Some(RecentScreenMessage::ExitTagSearchInsertMode),
                 KeyCode::Char(c) => Some(RecentScreenMessage::InsertTagSearchInputChar(c)),
@@ -146,34 +144,36 @@ impl RecentScreen {
 
     async fn update(&mut self, message: RecentScreenMessage) -> Result<(), Box<dyn Error>> {
         match message {
-            RecentScreenMessage::SwitchToTagView => {
-                if let Some(idx) = self.list_view_state.selected_idx {
-                    self.view = View::TagView;
-                    let zettel_id = self.list_view_state.zettels[idx].id;
-                    let tags = get_tags(&self.db_path, zettel_id).await?;
-                    let selected_idx = if tags.len() > 0 { Some(0) } else { None };
-                    self.tag_view_state = Some(TagViewState {
-                        zettel_id,
-                        tags,
-                        input: String::new(),
-                        input_mode: InputMode::Normal,
-                        selected_idx,
-                    });
+            RecentScreenMessage::SwitchView(view) => match view {
+                View::ListView => {
+                    self.tag_view_state = None;
+                    self.tag_search_view_state = None;
+                    self.view = View::ListView;
                 }
-            }
-            RecentScreenMessage::SwitchToListView => {
-                self.tag_view_state = None;
-                self.tag_search_view_state = None;
-                self.view = View::ListView;
-            }
-            RecentScreenMessage::SwitchToTagSearchView => {
-                self.tag_view_state = None;
-                self.tag_search_view_state = Some(TagSearchViewState {
-                    input_mode: InputMode::Normal,
-                    input: String::new(),
-                });
-                self.view = View::TagSearchView;
-            }
+                View::TagView => {
+                    if let Some(idx) = self.list_view_state.selected_idx {
+                        self.view = View::TagView;
+                        let zettel_id = self.list_view_state.zettels[idx].id;
+                        let tags = get_tags(&self.db_path, zettel_id).await?;
+                        let selected_idx = if tags.len() > 0 { Some(0) } else { None };
+                        self.tag_view_state = Some(TagViewState {
+                            zettel_id,
+                            tags,
+                            input: String::new(),
+                            input_mode: InputMode::Normal,
+                            selected_idx,
+                        });
+                    }
+                }
+                View::TagSearchView => {
+                    self.tag_view_state = None;
+                    self.tag_search_view_state = Some(TagSearchViewState {
+                        input_mode: InputMode::Normal,
+                        input: String::new(),
+                    });
+                    self.view = View::TagSearchView;
+                }
+            },
             RecentScreenMessage::EnterTagInputInsertMode => {
                 if let View::TagView = self.view {
                     if let Some(state) = &mut self.tag_view_state {
