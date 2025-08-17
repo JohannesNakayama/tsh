@@ -374,91 +374,99 @@ impl Screen for RecentScreen {
         );
         f.render_widget(preview, layout[1]);
 
-        if let View::TagView = self.view {
-            if let Some(state) = &mut self.tag_view_state {
-                let tag_list_items: Vec<ListItem> = state
-                    .tags
-                    .iter()
-                    .enumerate()
-                    .map(|(i, zettel_tag)| {
-                        let mut item = ListItem::from(zettel_tag);
-                        if let Some(idx) = state.selected_idx {
-                            if i == idx {
-                                item = item.style(
-                                    Style::default()
-                                        .fg(Color::LightGreen)
-                                        .add_modifier(Modifier::BOLD),
-                                );
-                            }
-                        }
-                        item
-                    })
-                    .collect();
-
-                let tag_list = List::new(tag_list_items);
-
-                let block = Block::bordered()
-                    .border_type(BorderType::Double)
-                    .border_style(Style::default().add_modifier(Modifier::BOLD))
-                    .title("Tag");
-
-                let area = popup_area(f.area(), 60, 40);
-
-                let inner_area = block.inner(area);
-
-                let popup_layout = Layout::default()
-                    .direction(Direction::Vertical)
-                    .constraints([Constraint::Length(1), Constraint::Min(0)])
-                    .split(inner_area);
-
-                let input_field =
-                    Paragraph::new(format!("> {}", state.input)).style(match state.input_mode {
-                        InputMode::Insert => Style::default()
-                            .add_modifier(Modifier::BOLD)
-                            .bg(Color::DarkGray)
-                            .fg(Color::LightGreen),
-                        InputMode::Normal => Style::default().bg(Color::DarkGray),
-                    });
-
-                f.render_widget(Clear, area);
-                f.render_widget(block, area);
-                f.render_widget(input_field, popup_layout[0]);
-                f.render_widget(tag_list, popup_layout[1]);
+        match self.view {
+            View::TagView => {
+                if let Some(state) = &mut self.tag_view_state {
+                    render_tag_view(f, state);
+                }
             }
-        }
-
-        if let View::TagSearchView = self.view {
-            if let Some(state) = &mut self.tag_search_view_state {
-                let block = Block::bordered()
-                    .border_type(BorderType::Double)
-                    .border_style(Style::default().add_modifier(Modifier::BOLD))
-                    .title("Tag Search");
-
-                let area = popup_area(f.area(), 60, 40);
-
-                let input_field =
-                    Paragraph::new(format!("> {}", state.input)).style(match state.input_mode {
-                        InputMode::Insert => Style::default()
-                            .add_modifier(Modifier::BOLD)
-                            .bg(Color::DarkGray)
-                            .fg(Color::LightGreen),
-                        InputMode::Normal => Style::default().bg(Color::DarkGray),
-                    });
-
-                let inner_area = block.inner(area);
-
-                let popup_layout = Layout::default()
-                    .direction(Direction::Vertical)
-                    .constraints([Constraint::Length(1), Constraint::Min(0)])
-                    .split(inner_area);
-
-                f.render_widget(Clear, area);
-                f.render_widget(block, area);
-                f.render_widget(input_field, popup_layout[0]);
-                // f.render_widget(tag_list, popup_layout[1]);
+            View::TagSearchView => {
+                if let Some(state) = &mut self.tag_search_view_state {
+                    render_tag_search_view(f, state);
+                }
             }
+            _ => {}
         }
     }
+}
+
+fn render_tag_view(f: &mut Frame, state: &mut TagViewState) {
+    let tag_list_items: Vec<ListItem> = state
+        .tags
+        .iter()
+        .enumerate()
+        .map(|(i, zettel_tag)| {
+            let mut item = ListItem::from(zettel_tag);
+            if let Some(idx) = state.selected_idx {
+                if i == idx {
+                    item = item.style(
+                        Style::default()
+                            .fg(Color::LightGreen)
+                            .add_modifier(Modifier::BOLD),
+                    );
+                }
+            }
+            item
+        })
+        .collect();
+
+    let tag_list = List::new(tag_list_items);
+
+    let block = Block::bordered()
+        .border_type(BorderType::Double)
+        .border_style(Style::default().add_modifier(Modifier::BOLD))
+        .title("Tag");
+
+    let area = popup_area(f.area(), 60, 40);
+
+    let inner_area = block.inner(area);
+
+    let popup_layout = Layout::default()
+        .direction(Direction::Vertical)
+        .constraints([Constraint::Length(1), Constraint::Min(0)])
+        .split(inner_area);
+
+    let input_field = Paragraph::new(format!("> {}", state.input)).style(match state.input_mode {
+        InputMode::Insert => Style::default()
+            .add_modifier(Modifier::BOLD)
+            .bg(Color::DarkGray)
+            .fg(Color::LightGreen),
+        InputMode::Normal => Style::default().bg(Color::DarkGray),
+    });
+
+    f.render_widget(Clear, area);
+    f.render_widget(block, area);
+    f.render_widget(input_field, popup_layout[0]);
+    f.render_widget(tag_list, popup_layout[1]);
+}
+
+fn render_tag_search_view(f: &mut Frame, state: &mut TagSearchViewState) {
+    let block = Block::bordered()
+        .border_type(BorderType::Double)
+        .border_style(Style::default().add_modifier(Modifier::BOLD))
+        .title("Tag Search");
+
+    let area = popup_area(f.area(), 60, 40);
+
+    let input_field = Paragraph::new(format!("> {}", state.input)).style(match state.input_mode {
+        InputMode::Insert => Style::default()
+            .add_modifier(Modifier::BOLD)
+            .bg(Color::DarkGray)
+            .fg(Color::LightGreen),
+        InputMode::Normal => Style::default().bg(Color::DarkGray),
+    });
+
+    let inner_area = block.inner(area);
+
+    let popup_layout = Layout::default()
+        .direction(Direction::Vertical)
+        .constraints([Constraint::Length(1), Constraint::Min(0)])
+        .split(inner_area);
+
+    f.render_widget(Clear, area);
+    f.render_widget(block, area);
+    f.render_widget(input_field, popup_layout[0]);
+    // f.render_widget(tag_list, popup_layout[1]);
 }
 
 // https://ratatui.rs/examples/apps/popup/
