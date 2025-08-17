@@ -33,13 +33,13 @@ pub struct RecentScreen {
     tag_search_view_state: Option<TagSearchViewState>,
 }
 
-pub struct ListViewState {
+struct ListViewState {
     zettels: Vec<Zettel>,
     selected_idx: Option<usize>,
     display_state: ListState,
 }
 
-pub struct TagViewState {
+struct TagViewState {
     zettel_id: i64,
     tags: Vec<ZettelTag>,
     selected_idx: Option<usize>,
@@ -47,7 +47,7 @@ pub struct TagViewState {
     input: String,
 }
 
-pub struct TagSearchViewState {
+struct TagSearchViewState {
     input_mode: InputMode,
     input: String,
 }
@@ -68,6 +68,10 @@ enum RecentScreenMessage {
     ResultListMoveUp,
     ResultListMoveDown,
     IterateZettel(Zettel),
+    EnterTagSearchInsertMode,
+    ExitTagSearchInsertMode,
+    InsertTagSearchInputChar(char),
+    DeleteTagSearchInputChar,
 }
 
 impl RecentScreen {
@@ -131,7 +135,10 @@ impl RecentScreen {
             },
             View::TagSearchView => match key.code {
                 KeyCode::Char('q') => Some(RecentScreenMessage::SwitchToListView),
-                // ... TODO
+                KeyCode::Char('i') => Some(RecentScreenMessage::EnterTagSearchInsertMode),
+                KeyCode::Esc => Some(RecentScreenMessage::ExitTagSearchInsertMode),
+                KeyCode::Char(c) => Some(RecentScreenMessage::InsertTagSearchInputChar(c)),
+                KeyCode::Backspace => Some(RecentScreenMessage::DeleteTagSearchInputChar),
                 _ => None,
             },
         }
@@ -257,6 +264,28 @@ impl RecentScreen {
                             .display_state
                             .select(self.list_view_state.selected_idx);
                     }
+                }
+            }
+            RecentScreenMessage::EnterTagSearchInsertMode => {
+                if let Some(state) = &mut self.tag_search_view_state {
+                    state.input_mode = InputMode::Insert;
+                    state.input = String::new();
+                }
+            }
+            RecentScreenMessage::ExitTagSearchInsertMode => {
+                if let Some(state) = &mut self.tag_search_view_state {
+                    state.input = String::new();
+                    state.input_mode = InputMode::Normal;
+                }
+            }
+            RecentScreenMessage::InsertTagSearchInputChar(c) => {
+                if let Some(state) = &mut self.tag_search_view_state {
+                    state.input.push(c);
+                }
+            }
+            RecentScreenMessage::DeleteTagSearchInputChar => {
+                if let Some(state) = &mut self.tag_search_view_state {
+                    state.input.pop();
                 }
             }
             _ => {}
