@@ -44,7 +44,9 @@ struct TagViewState {
 }
 
 struct TagSearchViewState {
-    matching_tags: Vec<String>,
+    tag_search_results: Vec<String>,
+    tag_search_results_list_state: ListState,
+    // selected_tags: Vec<String>,
     input_mode: InputMode,
     input: String,
 }
@@ -68,6 +70,8 @@ enum RecentScreenMessage {
     InsertTagSearchInputChar(char),
     DeleteTagSearchInputChar,
     SubmitTagSearchQuery,
+    TagSearchResultListMoveUp,
+    TagSearchResultListMoveDown,
 }
 
 impl RecentScreen {
@@ -129,6 +133,8 @@ impl RecentScreen {
                     InputMode::Normal => match key.code {
                         KeyCode::Char('q') => Some(RecentScreenMessage::SwitchView(View::ListView)),
                         KeyCode::Char('i') => Some(RecentScreenMessage::EnterTagSearchInsertMode),
+                        KeyCode::Up => Some(RecentScreenMessage::TagSearchResultListMoveUp),
+                        KeyCode::Down => Some(RecentScreenMessage::TagSearchResultListMoveDown),
                         _ => None,
                     },
                     InputMode::Insert => match key.code {
@@ -170,7 +176,9 @@ impl RecentScreen {
                 View::TagSearchView => {
                     self.tag_view_state = None;
                     self.tag_search_view_state = Some(TagSearchViewState {
-                        matching_tags: vec![],
+                        tag_search_results: vec![],
+                        tag_search_results_list_state: ListState::default(),
+                        // selected_tags: vec![],
                         input_mode: InputMode::Normal,
                         input: String::new(),
                     });
@@ -268,6 +276,8 @@ impl RecentScreen {
             }
             RecentScreenMessage::EnterTagSearchInsertMode => {
                 if let Some(state) = &mut self.tag_search_view_state {
+                    state.tag_search_results_list_state.select(None);
+                    state.tag_search_results.clear();
                     state.input_mode = InputMode::Insert;
                     state.input = String::new();
                 }
@@ -276,6 +286,9 @@ impl RecentScreen {
                 if let Some(state) = &mut self.tag_search_view_state {
                     state.input = String::new();
                     state.input_mode = InputMode::Normal;
+                    if state.tag_search_results.len() > 0 {
+                        state.tag_search_results_list_state.select_first();
+                    }
                 }
             }
             RecentScreenMessage::InsertTagSearchInputChar(c) => {
@@ -292,7 +305,30 @@ impl RecentScreen {
                 if let Some(state) = &mut self.tag_search_view_state {
                     if !state.input.is_empty() {
                         let tags = find_tags(&self.db_path, &state.input).await?;
-                        state.matching_tags = tags;
+                        state.tag_search_results = tags;
+                    }
+                    state.input_mode = InputMode::Normal;
+                    if !state.tag_search_results.is_empty() {
+                        state.tag_search_results_list_state.select_first();
+                    }
+                }
+            }
+            RecentScreenMessage::TagSearchResultListMoveUp => {
+                if let Some(state) = &mut self.tag_search_view_state {
+                    if let Some(_) = self.zettel_list_state.selected_mut() {
+                        state.tag_search_results_list_state.select_previous();
+                    }
+                }
+            }
+            RecentScreenMessage::TagSearchResultListMoveDown => {
+                if let Some(state) = &mut self.tag_search_view_state {
+                    let n_tags = state.tag_search_results.len();
+                    if let Some(idx) = self.zettel_list_state.selected_mut().clone() {
+                        if idx < ((n_tags - 1) as usize) {
+                            state.tag_search_results_list_state.select_next();
+                        } else {
+                            state.tag_search_results_list_state.select(Some(idx));
+                        }
                     }
                 }
             }
@@ -460,21 +496,21 @@ fn render_tag_search_view(f: &mut Frame, state: &mut TagSearchViewState) {
     });
 
     let tag_list_items: Vec<ListItem> = state
-        .matching_tags
+        .tag_search_results
         .iter()
-        .map(|tag| {
+        .enumerate()
+        .map(|(i, tag)| {
             let line = Line::styled(format!("#{}", tag), Style::default());
-            let item = ListItem::new(line);
-            // let mut item = ListItem::new(line);
-            // if let Some(idx) = state.selected_idx {
-            //     if i == idx {
-            //         item = item.style(
-            //             Style::default()
-            //                 .fg(Color::LightGreen)
-            //                 .add_modifier(Modifier::BOLD),
-            //         );
-            //     }
-            // }
+            let mut item = ListItem::new(line);
+            if let Some(idx) = state.tag_search_results_list_state.selected() {
+                if i == idx {
+                    item = item.style(
+                        Style::default()
+                            .fg(Color::LightGreen)
+                            .add_modifier(Modifier::BOLD),
+                    );
+                }
+            }
             item
         })
         .collect();
