@@ -131,13 +131,21 @@ impl RecentScreen {
                 },
                 None => None,
             },
-            View::TagSearchView => match key.code {
-                KeyCode::Char('q') => Some(RecentScreenMessage::SwitchView(View::ListView)),
-                KeyCode::Char('i') => Some(RecentScreenMessage::EnterTagSearchInsertMode),
-                KeyCode::Esc => Some(RecentScreenMessage::ExitTagSearchInsertMode),
-                KeyCode::Char(c) => Some(RecentScreenMessage::InsertTagSearchInputChar(c)),
-                KeyCode::Backspace => Some(RecentScreenMessage::DeleteTagSearchInputChar),
-                _ => None,
+            View::TagSearchView => match &self.tag_search_view_state {
+                Some(state) => match state.input_mode {
+                    InputMode::Normal => match key.code {
+                        KeyCode::Char('q') => Some(RecentScreenMessage::SwitchView(View::ListView)),
+                        KeyCode::Char('i') => Some(RecentScreenMessage::EnterTagSearchInsertMode),
+                        _ => None,
+                    },
+                    InputMode::Insert => match key.code {
+                        KeyCode::Esc => Some(RecentScreenMessage::ExitTagSearchInsertMode),
+                        KeyCode::Char(c) => Some(RecentScreenMessage::InsertTagSearchInputChar(c)),
+                        KeyCode::Backspace => Some(RecentScreenMessage::DeleteTagSearchInputChar),
+                        _ => None,
+                    },
+                },
+                None => None,
             },
         }
     }
