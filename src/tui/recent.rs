@@ -28,15 +28,10 @@ pub struct RecentScreen {
     db_path: String,
     llm_config: LlmConfig,
     view: View,
-    list_view_state: ListViewState,
+    zettels: Vec<Zettel>,
+    zettel_list_state: ListState,
     tag_view_state: Option<TagViewState>,
     tag_search_view_state: Option<TagSearchViewState>,
-}
-
-struct ListViewState {
-    zettels: Vec<Zettel>,
-    selected_idx: Option<usize>,
-    display_state: ListState,
 }
 
 struct TagViewState {
@@ -75,19 +70,14 @@ enum RecentScreenMessage {
 impl RecentScreen {
     pub async fn new(db_path: String, llm_config: LlmConfig) -> Result<Self, Box<dyn Error>> {
         let n_recent_zettels = get_n_recent_zettels(&db_path, 100).await?;
+        let mut display_state = ListState::default();
+        display_state.select_first();
         Ok(Self {
             db_path,
             llm_config,
             view: View::ListView,
-            list_view_state: ListViewState {
-                zettels: n_recent_zettels.clone(),
-                selected_idx: if n_recent_zettels.is_empty() {
-                    None
-                } else {
-                    Some(0)
-                },
-                display_state: ListState::default(),
-            },
+            zettels: n_recent_zettels.clone(),
+            zettel_list_state: display_state,
             tag_view_state: None,
             tag_search_view_state: None,
         })
@@ -102,8 +92,8 @@ impl RecentScreen {
                 KeyCode::Up => Some(RecentScreenMessage::ResultListMoveUp),
                 KeyCode::Down => Some(RecentScreenMessage::ResultListMoveDown),
                 KeyCode::Enter => {
-                    if let Some(idx) = self.list_view_state.selected_idx {
-                        let zettel = self.list_view_state.zettels[idx].clone();
+                    if let Some(idx) = self.zettel_list_state.selected_mut() {
+                        let zettel = self.zettels[*idx].clone();
                         Some(RecentScreenMessage::IterateZettel(zettel))
                     } else {
                         None
@@ -159,9 +149,9 @@ impl RecentScreen {
                     self.view = View::ListView;
                 }
                 View::TagView => {
-                    if let Some(idx) = self.list_view_state.selected_idx {
+                    if let Some(idx) = self.zettel_list_state.selected_mut() {
                         self.view = View::TagView;
-                        let zettel_id = self.list_view_state.zettels[idx].id;
+                        let zettel_id = self.zettels[*idx].id;
                         let tags = get_tags(&self.db_path, zettel_id).await?;
                         let selected_idx = if tags.len() > 0 { Some(0) } else { None };
                         self.tag_view_state = Some(TagViewState {
@@ -257,20 +247,17 @@ impl RecentScreen {
                 }
             }
             RecentScreenMessage::ResultListMoveUp => {
-                if let Some(idx) = self.list_view_state.selected_idx {
-                    self.list_view_state.selected_idx = Some(idx.saturating_sub(1));
-                    self.list_view_state
-                        .display_state
-                        .select(self.list_view_state.selected_idx);
+                if let Some(_) = self.zettel_list_state.selected_mut() {
+                    self.zettel_list_state.select_previous();
                 }
             }
             RecentScreenMessage::ResultListMoveDown => {
-                if let Some(idx) = self.list_view_state.selected_idx {
-                    if idx + 1 < self.list_view_state.zettels.len() {
-                        self.list_view_state.selected_idx = Some(idx + 1);
-                        self.list_view_state
-                            .display_state
-                            .select(self.list_view_state.selected_idx);
+                let n_zettels = self.zettels.len();
+                if let Some(idx) = self.zettel_list_state.selected_mut().clone() {
+                    if idx < ((n_zettels - 1) as usize) {
+                        self.zettel_list_state.select_next();
+                    } else {
+                        self.zettel_list_state.select(Some(idx));
                     }
                 }
             }
@@ -334,14 +321,13 @@ impl Screen for RecentScreen {
             .split(f.area());
 
         let recent_zettels: Vec<ListItem> = self
-            .list_view_state
             .zettels
             .iter()
             .enumerate()
             .map(|(i, zettel)| {
                 let mut item = ListItem::from(zettel);
-                if let Some(idx) = self.list_view_state.selected_idx {
-                    if i == idx {
+                if let Some(idx) = self.zettel_list_state.selected_mut() {
+                    if i == *idx {
                         item = item.style(
                             Style::default()
                                 .bg(Color::DarkGray)
@@ -360,9 +346,9 @@ impl Screen for RecentScreen {
                 .title("Recent Zettels"),
         );
 
-        let preview_paragraph = match self.list_view_state.selected_idx {
+        let preview_paragraph = match self.zettel_list_state.selected_mut() {
             Some(idx) => {
-                let selected_zettel = &self.list_view_state.zettels[idx];
+                let selected_zettel = &self.zettels[*idx];
                 Paragraph::new(selected_zettel.content.to_string())
             }
             None => Paragraph::default(),
@@ -375,11 +361,7 @@ impl Screen for RecentScreen {
                 .title("Preview"),
         );
 
-        f.render_stateful_widget(
-            search_results_list,
-            layout[0],
-            &mut self.list_view_state.display_state,
-        );
+        f.render_stateful_widget(search_results_list, layout[0], &mut self.zettel_list_state);
         f.render_widget(preview, layout[1]);
 
         match self.view {
