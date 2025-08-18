@@ -5,11 +5,12 @@ use ratatui::{
     crossterm::event::{KeyCode, KeyEvent},
     layout::{Constraint, Direction, Flex, Layout, Rect},
     style::{Color, Modifier, Style},
+    text::Line,
     widgets::{Block, BorderType, Borders, Clear, List, ListItem, ListState, Paragraph},
 };
 
 use crate::{
-    api::{add_tag_to_zettel, delete_tag_from_zettel, get_n_recent_zettels, get_tags},
+    api::{add_tag_to_zettel, delete_tag_from_zettel, find_tags, get_n_recent_zettels, get_tags},
     model::{Zettel, ZettelTag},
     tui::{
         app::{ActiveScreenType, AppCommand, LlmConfig, Screen},
@@ -43,6 +44,7 @@ struct TagViewState {
 }
 
 struct TagSearchViewState {
+    matching_tags: Vec<String>,
     input_mode: InputMode,
     input: String,
 }
@@ -65,6 +67,7 @@ enum RecentScreenMessage {
     ExitTagSearchInsertMode,
     InsertTagSearchInputChar(char),
     DeleteTagSearchInputChar,
+    SubmitTagSearchQuery,
 }
 
 impl RecentScreen {
@@ -132,6 +135,7 @@ impl RecentScreen {
                         KeyCode::Esc => Some(RecentScreenMessage::ExitTagSearchInsertMode),
                         KeyCode::Char(c) => Some(RecentScreenMessage::InsertTagSearchInputChar(c)),
                         KeyCode::Backspace => Some(RecentScreenMessage::DeleteTagSearchInputChar),
+                        KeyCode::Enter => Some(RecentScreenMessage::SubmitTagSearchQuery),
                         _ => None,
                     },
                 },
@@ -166,6 +170,7 @@ impl RecentScreen {
                 View::TagSearchView => {
                     self.tag_view_state = None;
                     self.tag_search_view_state = Some(TagSearchViewState {
+                        matching_tags: vec![],
                         input_mode: InputMode::Normal,
                         input: String::new(),
                     });
@@ -281,6 +286,14 @@ impl RecentScreen {
             RecentScreenMessage::DeleteTagSearchInputChar => {
                 if let Some(state) = &mut self.tag_search_view_state {
                     state.input.pop();
+                }
+            }
+            RecentScreenMessage::SubmitTagSearchQuery => {
+                if let Some(state) = &mut self.tag_search_view_state {
+                    if !state.input.is_empty() {
+                        let tags = find_tags(&self.db_path, &state.input).await?;
+                        state.matching_tags = tags;
+                    }
                 }
             }
             _ => {}
@@ -446,6 +459,28 @@ fn render_tag_search_view(f: &mut Frame, state: &mut TagSearchViewState) {
         InputMode::Normal => Style::default().bg(Color::DarkGray),
     });
 
+    let tag_list_items: Vec<ListItem> = state
+        .matching_tags
+        .iter()
+        .map(|tag| {
+            let line = Line::styled(format!("#{}", tag), Style::default());
+            let item = ListItem::new(line);
+            // let mut item = ListItem::new(line);
+            // if let Some(idx) = state.selected_idx {
+            //     if i == idx {
+            //         item = item.style(
+            //             Style::default()
+            //                 .fg(Color::LightGreen)
+            //                 .add_modifier(Modifier::BOLD),
+            //         );
+            //     }
+            // }
+            item
+        })
+        .collect();
+
+    let tag_list = List::new(tag_list_items);
+
     let inner_area = block.inner(area);
 
     let popup_layout = Layout::default()
@@ -456,7 +491,7 @@ fn render_tag_search_view(f: &mut Frame, state: &mut TagSearchViewState) {
     f.render_widget(Clear, area);
     f.render_widget(block, area);
     f.render_widget(input_field, popup_layout[0]);
-    // f.render_widget(tag_list, popup_layout[1]);
+    f.render_widget(tag_list, popup_layout[1]);
 }
 
 // https://ratatui.rs/examples/apps/popup/

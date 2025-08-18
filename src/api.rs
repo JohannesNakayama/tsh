@@ -3,7 +3,7 @@ use std::error::Error;
 use crate::{
     combine_zettel_contents,
     db::{
-        add_tag_if_not_exists, delete_tag_for_zettel_if_exists, find_n_recent_leaf_zettels,
+        self, add_tag_if_not_exists, delete_tag_for_zettel_if_exists, find_n_recent_leaf_zettels,
         find_zettels_by_embedding, get_db, get_tags_for_zettel, store_zettel,
     },
     llm::LlmClient,
@@ -108,4 +108,11 @@ pub async fn delete_tag_from_zettel(
     delete_tag_for_zettel_if_exists(&tx, zettel_id, tag).await?;
     tx.commit()?;
     Ok(())
+}
+
+pub async fn find_tags(db_path: &str, search_string: &str) -> Result<Vec<String>, Box<dyn Error>> {
+    let mut conn = get_db(db_path).await?;
+    let tx = conn.transaction()?;
+    let tags = db::find_tags_by_search_string(&tx, search_string).await?;
+    Ok(tags)
 }
