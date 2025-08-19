@@ -114,5 +114,6 @@ pub async fn find_tags(db_path: &str, search_string: &str) -> Result<Vec<String>
     let mut conn = get_db(db_path).await?;
     let tx = conn.transaction()?;
     let tags = db::find_tags_by_search_string(&tx, search_string).await?;
+    tx.commit()?;
     Ok(tags)
 }
