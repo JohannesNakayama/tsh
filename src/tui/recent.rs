@@ -46,7 +46,7 @@ struct TagViewState {
 struct TagSearchViewState {
     tag_search_results: Vec<String>,
     tag_search_results_list_state: ListState,
-    // selected_tags: Vec<String>,
+    selected_tags: Vec<String>,
     input_mode: InputMode,
     input: String,
 }
@@ -72,6 +72,7 @@ enum RecentScreenMessage {
     SubmitTagSearchQuery,
     TagSearchResultListMoveUp,
     TagSearchResultListMoveDown,
+    TagSearchResultAddToSelected,
 }
 
 impl RecentScreen {
@@ -135,6 +136,7 @@ impl RecentScreen {
                         KeyCode::Char('i') => Some(RecentScreenMessage::EnterTagSearchInsertMode),
                         KeyCode::Up => Some(RecentScreenMessage::TagSearchResultListMoveUp),
                         KeyCode::Down => Some(RecentScreenMessage::TagSearchResultListMoveDown),
+                        KeyCode::Right => Some(RecentScreenMessage::TagSearchResultAddToSelected),
                         _ => None,
                     },
                     InputMode::Insert => match key.code {
@@ -178,7 +180,7 @@ impl RecentScreen {
                     self.tag_search_view_state = Some(TagSearchViewState {
                         tag_search_results: vec![],
                         tag_search_results_list_state: ListState::default(),
-                        // selected_tags: vec![],
+                        selected_tags: vec![],
                         input_mode: InputMode::Normal,
                         input: String::new(),
                     });
@@ -328,6 +330,16 @@ impl RecentScreen {
                             state.tag_search_results_list_state.select_next();
                         } else {
                             state.tag_search_results_list_state.select(Some(idx));
+                        }
+                    }
+                }
+            }
+            RecentScreenMessage::TagSearchResultAddToSelected => {
+                if let Some(state) = &mut self.tag_search_view_state {
+                    if let Some(idx) = state.tag_search_results_list_state.selected() {
+                        let selected_tag = state.tag_search_results[idx].clone();
+                        if !state.selected_tags.contains(&selected_tag) {
+                            state.selected_tags.push(selected_tag);
                         }
                     }
                 }
@@ -515,7 +527,21 @@ fn render_tag_search_view(f: &mut Frame, state: &mut TagSearchViewState) {
         })
         .collect();
 
+    let selected_tags_list_items: Vec<ListItem> = state
+        .selected_tags
+        .iter()
+        .map(|tag| {
+            let line = Line::styled(
+                format!("#{}", tag),
+                Style::default().add_modifier(Modifier::ITALIC),
+            );
+            ListItem::new(line)
+        })
+        .collect();
+
     let tag_list = List::new(tag_list_items);
+
+    let selected_tags_list = List::new(selected_tags_list_items);
 
     let inner_area = block.inner(area);
 
@@ -524,10 +550,16 @@ fn render_tag_search_view(f: &mut Frame, state: &mut TagSearchViewState) {
         .constraints([Constraint::Length(1), Constraint::Min(0)])
         .split(inner_area);
 
+    let inner_layout = Layout::default()
+        .direction(Direction::Horizontal)
+        .constraints([Constraint::Percentage(50), Constraint::Percentage(50)])
+        .split(popup_layout[1]);
+
     f.render_widget(Clear, area);
     f.render_widget(block, area);
     f.render_widget(input_field, popup_layout[0]);
-    f.render_widget(tag_list, popup_layout[1]);
+    f.render_widget(tag_list, inner_layout[0]);
+    f.render_widget(selected_tags_list, inner_layout[1]);
 }
 
 // https://ratatui.rs/examples/apps/popup/
