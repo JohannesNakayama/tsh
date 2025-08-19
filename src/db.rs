@@ -239,12 +239,12 @@ pub async fn delete_tag_for_zettel_if_exists(
 
 pub async fn find_zettels_by_tags(
     tx: &Transaction<'_>,
-    tags: Vec<&str>,
+    tags: Vec<String>,
 ) -> Result<Vec<Zettel>, rusqlite::Error> {
     let placeholders = tags.iter().map(|_| "?").collect::<Vec<_>>().join(", ");
     let sql_string = format!(
         "
-        select
+        select distinct
               z.id
             , z.content
             , z.created_at

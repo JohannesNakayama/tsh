@@ -10,7 +10,10 @@ use ratatui::{
 };
 
 use crate::{
-    api::{add_tag_to_zettel, delete_tag_from_zettel, find_tags, get_n_recent_zettels, get_tags},
+    api::{
+        add_tag_to_zettel, delete_tag_from_zettel, find_tags, get_n_recent_zettels, get_tags,
+        get_zettels_by_tags,
+    },
     model::{Zettel, ZettelTag},
     tui::{
         app::{ActiveScreenType, AppCommand, LlmConfig, Screen},
@@ -73,6 +76,7 @@ enum RecentScreenMessage {
     TagSearchResultListMoveUp,
     TagSearchResultListMoveDown,
     TagSearchResultAddToSelected,
+    SubmitSelectedTagsForFiltering,
 }
 
 impl RecentScreen {
@@ -137,6 +141,7 @@ impl RecentScreen {
                         KeyCode::Up => Some(RecentScreenMessage::TagSearchResultListMoveUp),
                         KeyCode::Down => Some(RecentScreenMessage::TagSearchResultListMoveDown),
                         KeyCode::Right => Some(RecentScreenMessage::TagSearchResultAddToSelected),
+                        KeyCode::Enter => Some(RecentScreenMessage::SubmitSelectedTagsForFiltering),
                         _ => None,
                     },
                     InputMode::Insert => match key.code {
@@ -342,6 +347,19 @@ impl RecentScreen {
                             state.selected_tags.push(selected_tag);
                         }
                     }
+                }
+            }
+            RecentScreenMessage::SubmitSelectedTagsForFiltering => {
+                if let Some(state) = &mut self.tag_search_view_state {
+                    self.zettels =
+                        get_zettels_by_tags(&self.db_path, state.selected_tags.clone()).await?;
+                    self.tag_view_state = None;
+                    self.tag_search_view_state = None;
+                    self.zettel_list_state = ListState::default();
+                    if self.zettels.len() > 0 {
+                        self.zettel_list_state.select_first();
+                    }
+                    self.view = View::ListView;
                 }
             }
             _ => {}

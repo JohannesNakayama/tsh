@@ -117,3 +117,14 @@ pub async fn find_tags(db_path: &str, search_string: &str) -> Result<Vec<String>
     tx.commit()?;
     Ok(tags)
 }
+
+pub async fn get_zettels_by_tags(
+    db_path: &str,
+    tags: Vec<String>,
+) -> Result<Vec<Zettel>, Box<dyn Error>> {
+    let mut conn = get_db(db_path).await?;
+    let tx = conn.transaction()?;
+    let zettels = db::find_zettels_by_tags(&tx, tags).await?;
+    tx.commit()?;
+    Ok(zettels)
+}
