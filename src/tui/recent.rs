@@ -81,14 +81,16 @@ enum RecentScreenMessage {
 impl RecentScreen {
     pub async fn new(db_path: String, llm_config: LlmConfig) -> Result<Self, Box<dyn Error>> {
         let n_recent_zettels = get_n_recent_zettels(&db_path, 100).await?;
-        let mut display_state = ListState::default();
-        display_state.select_first();
+        let mut zettel_list_state = ListState::default();
+        if n_recent_zettels.len() > 0 {
+            zettel_list_state.select_first();
+        }
         Ok(Self {
             db_path,
             llm_config,
             view: View::ListView,
             zettels: n_recent_zettels.clone(),
-            zettel_list_state: display_state,
+            zettel_list_state,
             tag_view_state: None,
             tag_search_view_state: None,
         })
@@ -399,7 +401,7 @@ impl Screen for RecentScreen {
             .constraints([Constraint::Percentage(50), Constraint::Percentage(50)])
             .split(f.area());
 
-        let recent_zettels_list_items: Vec<ListItem> = self
+        let zettels_list_items: Vec<ListItem> = self
             .zettels
             .iter()
             .enumerate()
@@ -418,10 +420,10 @@ impl Screen for RecentScreen {
             })
             .collect();
 
-        let search_results_list = List::new(recent_zettels_list_items).block(
+        let zettels_list = List::new(zettels_list_items).block(
             Block::default()
                 .borders(Borders::ALL)
-                .border_type(BorderType::Rounded)
+                .border_type(BorderType::Thick)
                 .title("Zettels"),
         );
 
@@ -435,11 +437,11 @@ impl Screen for RecentScreen {
         .block(
             Block::default()
                 .borders(Borders::ALL)
-                .border_type(BorderType::Rounded)
+                .border_type(BorderType::Thick)
                 .title("Preview"),
         );
 
-        f.render_stateful_widget(search_results_list, layout[0], &mut self.zettel_list_state);
+        f.render_stateful_widget(zettels_list, layout[0], &mut self.zettel_list_state);
         f.render_widget(preview, layout[1]);
 
         match self.view {
