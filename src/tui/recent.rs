@@ -1,5 +1,3 @@
-use std::error::Error;
-
 use ratatui::{
     Frame,
     crossterm::event::{KeyCode, KeyEvent},
@@ -8,6 +6,7 @@ use ratatui::{
     text::Line,
     widgets::{Block, BorderType, Borders, Clear, List, ListItem, ListState, Paragraph},
 };
+use std::error::Error;
 
 use crate::{
     api::{
@@ -41,7 +40,7 @@ pub struct RecentScreen {
 struct TagViewState {
     zettel_id: i64,
     tags: Vec<ZettelTag>,
-    selected_idx: Option<usize>,
+    tags_list_state: ListState,
     input_mode: InputMode,
     input: String,
 }
@@ -166,17 +165,20 @@ impl RecentScreen {
                     self.view = View::ListView;
                 }
                 View::TagView => {
-                    if let Some(idx) = self.zettel_list_state.selected_mut() {
+                    if let Some(idx) = self.zettel_list_state.selected() {
                         self.view = View::TagView;
-                        let zettel_id = self.zettels[*idx].id;
+                        let zettel_id = self.zettels[idx].id;
                         let tags = get_tags(&self.db_path, zettel_id).await?;
-                        let selected_idx = if tags.len() > 0 { Some(0) } else { None };
+                        let mut tags_list_state = ListState::default();
+                        if tags.len() > 0 {
+                            tags_list_state.select_first();
+                        }
                         self.tag_view_state = Some(TagViewState {
                             zettel_id,
                             tags,
+                            tags_list_state,
                             input: String::new(),
                             input_mode: InputMode::Normal,
-                            selected_idx,
                         });
                     }
                 }
@@ -195,7 +197,7 @@ impl RecentScreen {
             RecentScreenMessage::EnterTagInputInsertMode => {
                 if let View::TagView = self.view {
                     if let Some(state) = &mut self.tag_view_state {
-                        state.selected_idx = None;
+                        state.tags_list_state.select(None);
                         state.input.clear();
                         state.input_mode = InputMode::Insert;
                     }
@@ -204,7 +206,7 @@ impl RecentScreen {
             RecentScreenMessage::ExitTagInputInsertMode => {
                 if let Some(state) = &mut self.tag_view_state {
                     if state.tags.len() > 0 {
-                        state.selected_idx = Some(0);
+                        state.tags_list_state.select_first();
                     }
                     state.input.clear();
                     state.input_mode = InputMode::Normal;
@@ -227,14 +229,14 @@ impl RecentScreen {
                     state.input = String::new();
                     state.input_mode = InputMode::Normal;
                     if state.tags.len() > 0 {
-                        state.selected_idx = Some(0);
+                        state.tags_list_state.select_first();
                     }
                 }
             }
             RecentScreenMessage::DeleteTag => {
                 if let Some(state) = &mut self.tag_view_state {
-                    if let Some(idx) = state.selected_idx {
-                        let selected_tag = state.tags[idx].clone();
+                    if let Some(idx) = state.tags_list_state.selected() {
+                        let selected_tag = &state.tags[idx];
                         delete_tag_from_zettel(
                             &self.db_path,
                             selected_tag.zettel_id,
@@ -243,25 +245,25 @@ impl RecentScreen {
                         .await?;
                         state.tags = get_tags(&self.db_path, selected_tag.zettel_id).await?;
                         if state.tags.len() > 0 {
-                            state.selected_idx = Some(0);
+                            state.tags_list_state.select_first();
                         } else {
-                            state.selected_idx = None;
+                            state.tags_list_state.select(None);
                         }
                     }
                 }
             }
             RecentScreenMessage::TagListMoveUp => {
                 if let Some(state) = &mut self.tag_view_state {
-                    if let Some(idx) = state.selected_idx {
-                        state.selected_idx = Some(idx.saturating_sub(1));
+                    if let Some(_) = state.tags_list_state.selected() {
+                        state.tags_list_state.select_previous();
                     }
                 }
             }
             RecentScreenMessage::TagListMoveDown => {
                 if let Some(state) = &mut self.tag_view_state {
-                    if let Some(idx) = state.selected_idx {
+                    if let Some(idx) = state.tags_list_state.selected() {
                         if idx + 1 < state.tags.len() {
-                            state.selected_idx = Some(idx + 1);
+                            state.tags_list_state.select_next();
                         }
                     }
                 }
@@ -330,11 +332,9 @@ impl RecentScreen {
             RecentScreenMessage::TagSearchResultListMoveDown => {
                 if let Some(state) = &mut self.tag_search_view_state {
                     let n_tags = state.tag_search_results.len();
-                    if let Some(idx) = self.zettel_list_state.selected_mut().clone() {
+                    if let Some(idx) = state.tag_search_results_list_state.selected() {
                         if idx < ((n_tags - 1) as usize) {
                             state.tag_search_results_list_state.select_next();
-                        } else {
-                            state.tag_search_results_list_state.select(Some(idx));
                         }
                     }
                 }
@@ -399,14 +399,14 @@ impl Screen for RecentScreen {
             .constraints([Constraint::Percentage(50), Constraint::Percentage(50)])
             .split(f.area());
 
-        let recent_zettels: Vec<ListItem> = self
+        let recent_zettels_list_items: Vec<ListItem> = self
             .zettels
             .iter()
             .enumerate()
             .map(|(i, zettel)| {
                 let mut item = ListItem::from(zettel);
-                if let Some(idx) = self.zettel_list_state.selected_mut() {
-                    if i == *idx {
+                if let Some(idx) = self.zettel_list_state.selected() {
+                    if i == idx {
                         item = item.style(
                             Style::default()
                                 .bg(Color::DarkGray)
@@ -418,22 +418,21 @@ impl Screen for RecentScreen {
             })
             .collect();
 
-        let search_results_list = List::new(recent_zettels).block(
+        let search_results_list = List::new(recent_zettels_list_items).block(
             Block::default()
                 .borders(Borders::ALL)
                 .border_type(BorderType::Rounded)
-                .title("Recent Zettels"),
+                .title("Zettels"),
         );
 
-        let preview_paragraph = match self.zettel_list_state.selected_mut() {
+        let preview = match self.zettel_list_state.selected() {
             Some(idx) => {
-                let selected_zettel = &self.zettels[*idx];
+                let selected_zettel = &self.zettels[idx];
                 Paragraph::new(selected_zettel.content.to_string())
             }
             None => Paragraph::default(),
-        };
-
-        let preview = preview_paragraph.block(
+        }
+        .block(
             Block::default()
                 .borders(Borders::ALL)
                 .border_type(BorderType::Rounded)
@@ -460,37 +459,16 @@ impl Screen for RecentScreen {
 }
 
 fn render_tag_view(f: &mut Frame, state: &mut TagViewState) {
-    let tag_list_items: Vec<ListItem> = state
-        .tags
-        .iter()
-        .enumerate()
-        .map(|(i, zettel_tag)| {
-            let mut item = ListItem::from(zettel_tag);
-            if let Some(idx) = state.selected_idx {
-                if i == idx {
-                    item = item.style(
-                        Style::default()
-                            .fg(Color::LightGreen)
-                            .add_modifier(Modifier::BOLD),
-                    );
-                }
-            }
-            item
-        })
-        .collect();
-
-    let tag_list = List::new(tag_list_items);
+    let area = popup_area(f.area(), 60, 40);
 
     let block = Block::bordered()
         .border_type(BorderType::Double)
         .border_style(Style::default().add_modifier(Modifier::BOLD))
         .title("Tag");
 
-    let area = popup_area(f.area(), 60, 40);
-
     let inner_area = block.inner(area);
 
-    let popup_layout = Layout::default()
+    let layout = Layout::default()
         .direction(Direction::Vertical)
         .constraints([Constraint::Length(1), Constraint::Min(0)])
         .split(inner_area);
@@ -503,19 +481,52 @@ fn render_tag_view(f: &mut Frame, state: &mut TagViewState) {
         InputMode::Normal => Style::default().bg(Color::DarkGray),
     });
 
+    let zettel_tags_list_items: Vec<ListItem> = state
+        .tags
+        .iter()
+        .enumerate()
+        .map(|(i, zettel_tag)| {
+            let mut item = ListItem::from(zettel_tag);
+            if let Some(idx) = state.tags_list_state.selected() {
+                if i == idx {
+                    item = item.style(
+                        Style::default()
+                            .fg(Color::LightGreen)
+                            .add_modifier(Modifier::BOLD),
+                    );
+                }
+            }
+            item
+        })
+        .collect();
+
+    let zettel_tags_list = List::new(zettel_tags_list_items);
+
     f.render_widget(Clear, area);
     f.render_widget(block, area);
-    f.render_widget(input_field, popup_layout[0]);
-    f.render_widget(tag_list, popup_layout[1]);
+    f.render_widget(input_field, layout[0]);
+    f.render_widget(zettel_tags_list, layout[1]);
 }
 
 fn render_tag_search_view(f: &mut Frame, state: &mut TagSearchViewState) {
+    let area = popup_area(f.area(), 60, 40);
+
     let block = Block::bordered()
         .border_type(BorderType::Double)
         .border_style(Style::default().add_modifier(Modifier::BOLD))
         .title("Tag Search");
 
-    let area = popup_area(f.area(), 60, 40);
+    let inner_area = block.inner(area);
+
+    let layout = Layout::default()
+        .direction(Direction::Vertical)
+        .constraints([Constraint::Length(1), Constraint::Min(0)])
+        .split(inner_area);
+
+    let inner_layout = Layout::default()
+        .direction(Direction::Horizontal)
+        .constraints([Constraint::Percentage(50), Constraint::Percentage(50)])
+        .split(layout[1]);
 
     let input_field = Paragraph::new(format!("> {}", state.input)).style(match state.input_mode {
         InputMode::Insert => Style::default()
@@ -525,7 +536,7 @@ fn render_tag_search_view(f: &mut Frame, state: &mut TagSearchViewState) {
         InputMode::Normal => Style::default().bg(Color::DarkGray),
     });
 
-    let tag_list_items: Vec<ListItem> = state
+    let tag_search_results_list_items: Vec<ListItem> = state
         .tag_search_results
         .iter()
         .enumerate()
@@ -545,6 +556,8 @@ fn render_tag_search_view(f: &mut Frame, state: &mut TagSearchViewState) {
         })
         .collect();
 
+    let tag_search_results_list = List::new(tag_search_results_list_items);
+
     let selected_tags_list_items: Vec<ListItem> = state
         .selected_tags
         .iter()
@@ -557,26 +570,12 @@ fn render_tag_search_view(f: &mut Frame, state: &mut TagSearchViewState) {
         })
         .collect();
 
-    let tag_list = List::new(tag_list_items);
-
     let selected_tags_list = List::new(selected_tags_list_items);
-
-    let inner_area = block.inner(area);
-
-    let popup_layout = Layout::default()
-        .direction(Direction::Vertical)
-        .constraints([Constraint::Length(1), Constraint::Min(0)])
-        .split(inner_area);
-
-    let inner_layout = Layout::default()
-        .direction(Direction::Horizontal)
-        .constraints([Constraint::Percentage(50), Constraint::Percentage(50)])
-        .split(popup_layout[1]);
 
     f.render_widget(Clear, area);
     f.render_widget(block, area);
-    f.render_widget(input_field, popup_layout[0]);
-    f.render_widget(tag_list, inner_layout[0]);
+    f.render_widget(input_field, layout[0]);
+    f.render_widget(tag_search_results_list, inner_layout[0]);
     f.render_widget(selected_tags_list, inner_layout[1]);
 }
 
