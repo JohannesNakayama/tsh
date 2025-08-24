@@ -16,7 +16,7 @@ use crate::{
     model::{Zettel, ZettelTag},
     tui::{
         app::{ActiveScreenType, AppCommand, LlmConfig, Screen},
-        common::InputMode,
+        common::{InputMode, ListWithState},
         main_menu::MainMenuScreen,
     },
 };
@@ -31,23 +31,20 @@ pub struct RecentScreen {
     db_path: String,
     llm_config: LlmConfig,
     view: View,
-    zettels: Vec<Zettel>,
-    zettel_list_state: ListState,
+    zettels: ListWithState<Zettel>,
     tag_view_state: Option<TagViewState>,
     tag_search_view_state: Option<TagSearchViewState>,
 }
 
 struct TagViewState {
     zettel_id: i64,
-    tags: Vec<ZettelTag>,
-    tags_list_state: ListState,
+    tags: ListWithState<ZettelTag>,
     input_mode: InputMode,
     input: String,
 }
 
 struct TagSearchViewState {
-    tag_search_results: Vec<String>,
-    tag_search_results_list_state: ListState,
+    tag_search_results: ListWithState<String>,
     selected_tags: Vec<String>,
     input_mode: InputMode,
     input: String,
@@ -80,17 +77,16 @@ enum RecentScreenMessage {
 
 impl RecentScreen {
     pub async fn new(db_path: String, llm_config: LlmConfig) -> Result<Self, Box<dyn Error>> {
-        let n_recent_zettels = get_n_recent_zettels(&db_path, 100).await?;
+        let recent_zettels = get_n_recent_zettels(&db_path, 100).await?;
         let mut zettel_list_state = ListState::default();
-        if n_recent_zettels.len() > 0 {
+        if recent_zettels.len() > 0 {
             zettel_list_state.select_first();
         }
         Ok(Self {
             db_path,
             llm_config,
             view: View::ListView,
-            zettels: n_recent_zettels.clone(),
-            zettel_list_state,
+            zettels: ListWithState::new(recent_zettels),
             tag_view_state: None,
             tag_search_view_state: None,
         })
@@ -105,8 +101,8 @@ impl RecentScreen {
                 KeyCode::Up => Some(RecentScreenMessage::ResultListMoveUp),
                 KeyCode::Down => Some(RecentScreenMessage::ResultListMoveDown),
                 KeyCode::Enter => {
-                    if let Some(idx) = self.zettel_list_state.selected_mut() {
-                        let zettel = self.zettels[*idx].clone();
+                    if let Some(idx) = self.zettels.curr_idx() {
+                        let zettel = self.zettels.items[idx].clone();
                         Some(RecentScreenMessage::IterateZettel(zettel))
                     } else {
                         None
@@ -167,18 +163,13 @@ impl RecentScreen {
                     self.view = View::ListView;
                 }
                 View::TagView => {
-                    if let Some(idx) = self.zettel_list_state.selected() {
+                    if let Some(idx) = self.zettels.curr_idx() {
                         self.view = View::TagView;
-                        let zettel_id = self.zettels[idx].id;
+                        let zettel_id = self.zettels.items[idx].id;
                         let tags = get_tags(&self.db_path, zettel_id).await?;
-                        let mut tags_list_state = ListState::default();
-                        if tags.len() > 0 {
-                            tags_list_state.select_first();
-                        }
                         self.tag_view_state = Some(TagViewState {
                             zettel_id,
-                            tags,
-                            tags_list_state,
+                            tags: ListWithState::new(tags),
                             input: String::new(),
                             input_mode: InputMode::Normal,
                         });
@@ -187,8 +178,7 @@ impl RecentScreen {
                 View::TagSearchView => {
                     self.tag_view_state = None;
                     self.tag_search_view_state = Some(TagSearchViewState {
-                        tag_search_results: vec![],
-                        tag_search_results_list_state: ListState::default(),
+                        tag_search_results: ListWithState::new(vec![]),
                         selected_tags: vec![],
                         input_mode: InputMode::Normal,
                         input: String::new(),
@@ -199,7 +189,7 @@ impl RecentScreen {
             RecentScreenMessage::EnterTagInputInsertMode => {
                 if let View::TagView = self.view {
                     if let Some(state) = &mut self.tag_view_state {
-                        state.tags_list_state.select(None);
+                        state.tags.unselect();
                         state.input.clear();
                         state.input_mode = InputMode::Insert;
                     }
@@ -207,9 +197,7 @@ impl RecentScreen {
             }
             RecentScreenMessage::ExitTagInputInsertMode => {
                 if let Some(state) = &mut self.tag_view_state {
-                    if state.tags.len() > 0 {
-                        state.tags_list_state.select_first();
-                    }
+                    state.tags.select_first();
                     state.input.clear();
                     state.input_mode = InputMode::Normal;
                 }
@@ -227,68 +215,45 @@ impl RecentScreen {
             RecentScreenMessage::SubmitTag => {
                 if let Some(state) = &mut self.tag_view_state {
                     add_tag_to_zettel(&self.db_path, state.zettel_id, state.input.clone()).await?;
-                    state.tags = get_tags(&self.db_path, state.zettel_id).await?;
+                    let upd_tags = get_tags(&self.db_path, state.zettel_id).await?;
+                    state.tags = ListWithState::new(upd_tags);
                     state.input = String::new();
                     state.input_mode = InputMode::Normal;
-                    if state.tags.len() > 0 {
-                        state.tags_list_state.select_first();
-                    }
                 }
             }
             RecentScreenMessage::DeleteTag => {
                 if let Some(state) = &mut self.tag_view_state {
-                    if let Some(idx) = state.tags_list_state.selected() {
-                        let selected_tag = &state.tags[idx];
+                    if let Some(zettel_tag) = state.tags.get_selected_item() {
                         delete_tag_from_zettel(
                             &self.db_path,
-                            selected_tag.zettel_id,
-                            &selected_tag.tag,
+                            zettel_tag.zettel_id,
+                            &zettel_tag.tag,
                         )
                         .await?;
-                        state.tags = get_tags(&self.db_path, selected_tag.zettel_id).await?;
-                        if state.tags.len() > 0 {
-                            state.tags_list_state.select_first();
-                        } else {
-                            state.tags_list_state.select(None);
-                        }
+                        let upd_tags = get_tags(&self.db_path, zettel_tag.zettel_id).await?;
+                        state.tags = ListWithState::new(upd_tags);
                     }
                 }
             }
             RecentScreenMessage::TagListMoveUp => {
                 if let Some(state) = &mut self.tag_view_state {
-                    if let Some(_) = state.tags_list_state.selected() {
-                        state.tags_list_state.select_previous();
-                    }
+                    state.tags.select_prev();
                 }
             }
             RecentScreenMessage::TagListMoveDown => {
                 if let Some(state) = &mut self.tag_view_state {
-                    if let Some(idx) = state.tags_list_state.selected() {
-                        if idx + 1 < state.tags.len() {
-                            state.tags_list_state.select_next();
-                        }
-                    }
+                    state.tags.select_next();
                 }
             }
             RecentScreenMessage::ResultListMoveUp => {
-                if let Some(_) = self.zettel_list_state.selected_mut() {
-                    self.zettel_list_state.select_previous();
-                }
+                self.zettels.select_prev();
             }
             RecentScreenMessage::ResultListMoveDown => {
-                let n_zettels = self.zettels.len();
-                if let Some(idx) = self.zettel_list_state.selected_mut().clone() {
-                    if idx < ((n_zettels - 1) as usize) {
-                        self.zettel_list_state.select_next();
-                    } else {
-                        self.zettel_list_state.select(Some(idx));
-                    }
-                }
+                self.zettels.select_next();
             }
             RecentScreenMessage::EnterTagSearchInsertMode => {
                 if let Some(state) = &mut self.tag_search_view_state {
-                    state.tag_search_results_list_state.select(None);
-                    state.tag_search_results.clear();
+                    state.tag_search_results.clear_items();
                     state.input_mode = InputMode::Insert;
                     state.input = String::new();
                 }
@@ -297,9 +262,7 @@ impl RecentScreen {
                 if let Some(state) = &mut self.tag_search_view_state {
                     state.input = String::new();
                     state.input_mode = InputMode::Normal;
-                    if state.tag_search_results.len() > 0 {
-                        state.tag_search_results_list_state.select_first();
-                    }
+                    state.tag_search_results.select_first();
                 }
             }
             RecentScreenMessage::InsertTagSearchInputChar(c) => {
@@ -315,36 +278,25 @@ impl RecentScreen {
             RecentScreenMessage::SubmitTagSearchQuery => {
                 if let Some(state) = &mut self.tag_search_view_state {
                     if !state.input.is_empty() {
-                        let tags = find_tags(&self.db_path, &state.input).await?;
-                        state.tag_search_results = tags;
+                        let search_results = find_tags(&self.db_path, &state.input).await?;
+                        state.tag_search_results = ListWithState::new(search_results);
                     }
                     state.input_mode = InputMode::Normal;
-                    if !state.tag_search_results.is_empty() {
-                        state.tag_search_results_list_state.select_first();
-                    }
                 }
             }
             RecentScreenMessage::TagSearchResultListMoveUp => {
                 if let Some(state) = &mut self.tag_search_view_state {
-                    if let Some(_) = self.zettel_list_state.selected_mut() {
-                        state.tag_search_results_list_state.select_previous();
-                    }
+                    state.tag_search_results.select_prev();
                 }
             }
             RecentScreenMessage::TagSearchResultListMoveDown => {
                 if let Some(state) = &mut self.tag_search_view_state {
-                    let n_tags = state.tag_search_results.len();
-                    if let Some(idx) = state.tag_search_results_list_state.selected() {
-                        if idx < ((n_tags - 1) as usize) {
-                            state.tag_search_results_list_state.select_next();
-                        }
-                    }
+                    state.tag_search_results.select_next();
                 }
             }
             RecentScreenMessage::TagSearchResultAddToSelected => {
                 if let Some(state) = &mut self.tag_search_view_state {
-                    if let Some(idx) = state.tag_search_results_list_state.selected() {
-                        let selected_tag = state.tag_search_results[idx].clone();
+                    if let Some(selected_tag) = state.tag_search_results.get_selected_item() {
                         if !state.selected_tags.contains(&selected_tag) {
                             state.selected_tags.push(selected_tag);
                         }
@@ -353,14 +305,11 @@ impl RecentScreen {
             }
             RecentScreenMessage::SubmitSelectedTagsForFiltering => {
                 if let Some(state) = &mut self.tag_search_view_state {
-                    self.zettels =
+                    let zettels_by_tag =
                         get_zettels_by_tags(&self.db_path, state.selected_tags.clone()).await?;
+                    self.zettels = ListWithState::new(zettels_by_tag);
                     self.tag_view_state = None;
                     self.tag_search_view_state = None;
-                    self.zettel_list_state = ListState::default();
-                    if self.zettels.len() > 0 {
-                        self.zettel_list_state.select_first();
-                    }
                     self.view = View::ListView;
                 }
             }
@@ -403,11 +352,13 @@ impl Screen for RecentScreen {
 
         let zettels_list_items: Vec<ListItem> = self
             .zettels
+            .items
+            .clone()
             .iter()
             .enumerate()
             .map(|(i, zettel)| {
                 let mut item = ListItem::from(zettel);
-                if let Some(idx) = self.zettel_list_state.selected() {
+                if let Some(idx) = self.zettels.curr_idx() {
                     if i == idx {
                         item = item.style(
                             Style::default()
@@ -427,12 +378,10 @@ impl Screen for RecentScreen {
                 .title("Zettels"),
         );
 
-        let preview = match self.zettel_list_state.selected() {
-            Some(idx) => {
-                let selected_zettel = &self.zettels[idx];
-                Paragraph::new(selected_zettel.content.to_string())
-            }
-            None => Paragraph::default(),
+        let preview = if let Some(zettel) = self.zettels.get_selected_item() {
+            Paragraph::new(zettel.content.to_string())
+        } else {
+            Paragraph::default()
         }
         .block(
             Block::default()
@@ -441,7 +390,7 @@ impl Screen for RecentScreen {
                 .title("Preview"),
         );
 
-        f.render_stateful_widget(zettels_list, layout[0], &mut self.zettel_list_state);
+        f.render_stateful_widget(zettels_list, layout[0], &mut self.zettels.list_state);
         f.render_widget(preview, layout[1]);
 
         match self.view {
@@ -485,11 +434,13 @@ fn render_tag_view(f: &mut Frame, state: &mut TagViewState) {
 
     let zettel_tags_list_items: Vec<ListItem> = state
         .tags
+        .items
+        .clone()
         .iter()
         .enumerate()
         .map(|(i, zettel_tag)| {
             let mut item = ListItem::from(zettel_tag);
-            if let Some(idx) = state.tags_list_state.selected() {
+            if let Some(idx) = state.tags.curr_idx() {
                 if i == idx {
                     item = item.style(
                         Style::default()
@@ -540,12 +491,14 @@ fn render_tag_search_view(f: &mut Frame, state: &mut TagSearchViewState) {
 
     let tag_search_results_list_items: Vec<ListItem> = state
         .tag_search_results
+        .items
+        .clone()
         .iter()
         .enumerate()
         .map(|(i, tag)| {
             let line = Line::styled(format!("#{}", tag), Style::default());
             let mut item = ListItem::new(line);
-            if let Some(idx) = state.tag_search_results_list_state.selected() {
+            if let Some(idx) = state.tag_search_results.curr_idx() {
                 if i == idx {
                     item = item.style(
                         Style::default()
