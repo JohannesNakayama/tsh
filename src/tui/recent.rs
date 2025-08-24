@@ -4,7 +4,7 @@ use ratatui::{
     layout::{Constraint, Direction, Flex, Layout, Rect},
     style::{Color, Modifier, Style},
     text::Line,
-    widgets::{Block, BorderType, Borders, Clear, List, ListItem, Paragraph},
+    widgets::{Block, BorderType, Borders, Clear, List, ListItem, Paragraph, Wrap},
 };
 use std::error::Error;
 
@@ -380,6 +380,7 @@ impl Screen for RecentScreen {
         } else {
             Paragraph::default()
         }
+        .wrap(Wrap { trim: true })
         .block(
             Block::default()
                 .borders(Borders::ALL)
