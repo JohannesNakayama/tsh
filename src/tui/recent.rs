@@ -78,10 +78,6 @@ enum RecentScreenMessage {
 impl RecentScreen {
     pub async fn new(db_path: String, llm_config: LlmConfig) -> Result<Self, Box<dyn Error>> {
         let recent_zettels = get_n_recent_zettels(&db_path, 100).await?;
-        let mut zettel_list_state = ListState::default();
-        if recent_zettels.len() > 0 {
-            zettel_list_state.select_first();
-        }
         Ok(Self {
             db_path,
             llm_config,
