@@ -4,7 +4,7 @@ use ratatui::{
     layout::{Constraint, Direction, Flex, Layout, Rect},
     style::{Color, Modifier, Style},
     text::Line,
-    widgets::{Block, BorderType, Borders, Clear, List, ListItem, ListState, Paragraph},
+    widgets::{Block, BorderType, Borders, Clear, List, ListItem, Paragraph},
 };
 use std::error::Error;
 
@@ -273,11 +273,12 @@ impl RecentScreen {
             }
             RecentScreenMessage::SubmitTagSearchQuery => {
                 if let Some(state) = &mut self.tag_search_view_state {
+                    state.input_mode = InputMode::Normal;
                     if !state.input.is_empty() {
                         let search_results = find_tags(&self.db_path, &state.input).await?;
                         state.tag_search_results = ListWithState::new(search_results);
                     }
-                    state.input_mode = InputMode::Normal;
+                    state.input.clear();
                 }
             }
             RecentScreenMessage::TagSearchResultListMoveUp => {
@@ -454,7 +455,7 @@ fn render_tag_view(f: &mut Frame, state: &mut TagViewState) {
     f.render_widget(Clear, area);
     f.render_widget(block, area);
     f.render_widget(input_field, layout[0]);
-    f.render_widget(zettel_tags_list, layout[1]);
+    f.render_stateful_widget(zettel_tags_list, layout[1], &mut state.tags.list_state);
 }
 
 fn render_tag_search_view(f: &mut Frame, state: &mut TagSearchViewState) {
@@ -526,7 +527,11 @@ fn render_tag_search_view(f: &mut Frame, state: &mut TagSearchViewState) {
     f.render_widget(Clear, area);
     f.render_widget(block, area);
     f.render_widget(input_field, layout[0]);
-    f.render_widget(tag_search_results_list, inner_layout[0]);
+    f.render_stateful_widget(
+        tag_search_results_list,
+        inner_layout[0],
+        &mut state.tag_search_results.list_state,
+    );
     f.render_widget(selected_tags_list, inner_layout[1]);
 }
 
